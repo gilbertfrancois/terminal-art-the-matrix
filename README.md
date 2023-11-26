@@ -28,7 +28,7 @@ To introduce colors using ANSI escape codes in C, you can incorporate specific s
 
 ## Compatibility
 
-This program boasts versatile compatibility, seamlessly running on a multitude of operating systems including macOS, Linux, and Windows. Its design is tailored to function effortlessly with nearly every standard C99 compiler available across these platforms. Whether compiling on macOS, Linux distributions, or Windows environments, this program ensures a consistent and reliable execution across diverse systems without compromise.
+This program boasts versatile compatibility, seamlessly running on a multitude of operating systems including macOS, Linux, Raspberry Pi OS and Windows. Its design is tailored to function effortlessly with nearly every standard C99 compiler available across these platforms. Whether compiling on macOS, Linux distributions, or Windows environments, this program ensures a consistent and reliable execution across diverse systems without compromise.
 
 
 
@@ -57,3 +57,30 @@ cd dist
 - Cmake will automatically add the debug and install target.
 - Choose from the menu **Build** -> **Build all**. The binary can be found in `<project_folder>/dist`.
 
+
+
+## Precompiled binaries
+
+The [Releases](https://github.com/gilbertfrancois/terminal-art-the-matrix/releases) page contains precompiled binaries for most popular supported systems.
+
+
+
+## Code signing on macOS
+
+This project contains an easy way to do code signing for your distribution binary on macOS. 
+
+- Set up your developer's ID as an environment variable named `CODE_SIGN_IDENTITY`. This variable typically holds the identity of your Developer ID Application, including your name and the Developer ID number, e.g.
+
+  ```sh
+  export CODE_SIGN_IDENTITY="Developer ID Application: [your name] (DEV_ID_NUMBER)"
+  ```
+
+- Use CMake to build the project with the `Release` build flag. This ensures that the compiled binary is optimized for distribution:
+
+  ```sh
+  cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+  cmake --build build
+  cmake --install build
+  ```
+
+- Upon successful signing, you'll receive a verbose response. Look for a message indicating that the binary has replaced an existing signature and that it's been signed, usually accompanied by the path to the binary and its signing status (e.g., "signed Mach-O thin").
