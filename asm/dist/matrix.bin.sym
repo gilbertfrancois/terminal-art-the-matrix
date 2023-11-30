@@ -1,0 +1,890 @@
+Sections:
+00: "segbff9" (BFF9-C000)
+01: "segc000" (C000-C9C6)
+
+
+Source: "src/matrix.bin.asm"
+                        	     1: ORGADR      equ $c000
+                        	     2: CHGMOD      equ $005f
+                        	     3: CHGCLR      equ $0062
+                        	     4: LDIRVM      equ $005c
+                        	     5: BREAKX      equ $00b7
+                        	     6: VDPData     equ $98
+                        	     7: VDPControl  equ $99
+                        	     8: 
+                        	     9: HTIMI       equ $fd9f
+                        	    10: JIFFY       equ $fc9e           ; 50Hz Jiffy Counter (2B/RW)
+                        	    11: FORCLR      equ $f3e9
+                        	    12: BAKCLR      equ $f3ea
+                        	    13: BDRCLR      equ $f3eb
+                        	    14: 
+                        	    15:     ; Place header before the binary.
+                        	    16:     org ORGADR - 7
+                        	    17:     ; Bin header, 7 bytes
+00:BFF9 FE              	    18:     db $fe
+00:BFFA 00C0            	    19:     dw _file_start
+00:BFFC C5C9            	    20:     dw _file_end - 1
+00:BFFE 00C0            	    21:     dw _main
+                        	    22: 
+                        	    23:     ; org statement after the header
+                        	    24:     org ORGADR
+                        	    25: 
+                        	    26: 
+                        	    27: _file_start:
+                        	    28: 
+                        	    29: _app_constants:
+                        	    30: SCREENMODE  equ 1               ; 0 = text mode, 1 = bitmap mode
+                        	    31: WIDTH       equ 32              ; Screen width
+                        	    32: HEIGHT      equ 24              ; Screen height 
+                        	    33: HHEIGHT     equ HEIGHT/2        ; Half screen height
+                        	    34: NAME_TABLE  equ $1800           ; Address of the name table
+                        	    35: N_PERM      equ 1               ; Number of permutations times 3 per screen update
+                        	    36: P_RAIN      equ 8               ; Probability of rain: 1/p_rain
+                        	    37: N_FADEOUTS  equ 3               ; Number of chars to darken at the end of the rain
+                        	    38: SPEED_VAR   equ 8               ; Speed variation of the rain drops
+                        	    39: WAIT_CYCLES equ 1		; N wait cycles before refresh. 1=50fps, 2=25fps, etc
+                        	    40: 
+                        	    41: _main:
+01:C000 CD17C0          	    42:     call _setup
+                        	    43: _main_loop:
+01:C003 3A1EC3          	    44:     ld a, (_request_render)
+01:C006 FE00            	    45:     cp 0
+01:C008 C20EC0          	    46:     jp nz, __breakx
+01:C00B CD4DC0          	    47:     call _update
+                        	    48:     ; draw is handled by interrupt hook, after _request_render is set to 1.
+                        	    49: __breakx:
+01:C00E CDB700          	    50:     call BREAKX
+01:C011 30F0            	    51:     jr nc, _main_loop
+01:C013 CD47C0          	    52:     call _cleanup
+01:C016 C9              	    53:     ret
+                        	    54: 
+                        	    55: _setup:
+                        	    56:     ; Install interrupt hook.
+01:C017 F3              	    57:     di
+                        	    58:     ; Preserve old hook instructions
+01:C018 219FFD          	    59:     ld hl, HTIMI
+01:C01B 1192C0          	    60:     ld de, _old_interrupt_hook
+01:C01E 010500          	    61:     ld bc, 5
+01:C021 EDB0            	    62:     ldir
+                        	    63:     ; Copy new hook instructions
+01:C023 2198C0          	    64:     ld hl, _new_interrupt_hook
+01:C026 119FFD          	    65:     ld de, HTIMI
+01:C029 010500          	    66:     ld bc, 5
+01:C02C EDB0            	    67:     ldir
+01:C02E FB              	    68:     ei
+                        	    69:     ; Set screen mode and colors
+01:C02F 3E01            	    70:     ld a, SCREENMODE
+01:C031 CD5F00          	    71:     call CHGMOD
+01:C034 21E9F3          	    72:     ld hl, FORCLR
+01:C037 3602            	    73:     ld (hl), 2
+01:C039 21EAF3          	    74:     ld hl, BAKCLR
+01:C03C 3601            	    75:     ld (hl), 1
+01:C03E 21EBF3          	    76:     ld hl, BDRCLR
+01:C041 3601            	    77:     ld (hl), 1
+01:C043 CD6200          	    78:     call CHGCLR
+01:C046 C9              	    79:     ret
+                        	    80: 
+                        	    81: _cleanup:
+01:C047 3E00            	    82:     ld a, 0
+01:C049 CD5F00          	    83:     call CHGMOD
+01:C04C C9              	    84:     ret
+                        	    85: 
+                        	    86: _update:
+01:C04D CD9DC0          	    87:     call _update_rain_state
+01:C050 CDE4C0          	    88:     call _update_rain_columns
+01:C053 CDB5C1          	    89:     call _update_rnd_char
+01:C056 211EC3          	    90:     ld hl, _request_render
+01:C059 3601            	    91:     ld (hl), 1
+01:C05B C9              	    92:     ret
+                        	    93: 
+                        	    94: _draw:
+                        	    95:     ; Copy new state to VRAM
+01:C05C 21C6C3          	    96:     ld hl, _name_table_buffer
+01:C05F 110018          	    97:     ld de, NAME_TABLE
+01:C062 010003          	    98:     ld bc, WIDTH*HEIGHT
+01:C065 CD5C00          	    99:     call LDIRVM
+01:C068 C9              	   100:     ret 
+                        	   101: 
+                        	   102: _run_interrupt:
+01:C069 2120C3          	   103:     ld hl, _interrupt_counter
+01:C06C 35              	   104:     dec (hl)
+01:C06D 7E              	   105:     ld a, (hl)
+01:C06E C292C0          	   106:     jp nz, _old_interrupt_hook
+                        	   107:     ; Run every WAIT_CYCLES times
+                        	   108:     ; Reset _interrupt counter and call _draw
+01:C071 3601            	   109:     ld (hl), WAIT_CYCLES
+01:C073 3A1EC3          	   110:     ld a, (_request_render)
+01:C076 FE01            	   111:     cp 1
+01:C078 C288C0          	   112:     jp nz, _set_is_slow
+                        	   113:     ; Update was ready, render request was set. 
+                        	   114:     ; reset _is_slow and _render_request, then call draw function.
+01:C07B 3E00            	   115:     ld a, 0
+01:C07D 321FC3          	   116:     ld (_is_slow), a
+01:C080 321EC3          	   117:     ld (_request_render), a
+01:C083 CD5CC0          	   118:     call _draw
+01:C086 180A            	   119:     jr _old_interrupt_hook
+                        	   120: _set_is_slow:
+01:C088 3E01            	   121:     ld a, 1
+01:C08A 321FC3          	   122:     ld (_is_slow), a
+01:C08D 3E21            	   123:     ld a, $21
+01:C08F 32C6C3          	   124:     ld (_name_table_buffer), a
+                        	   125: ; Interrupt jump block.
+                        	   126: _old_interrupt_hook:
+01:C092 00              	   127:     db 0, 0, 0, 0, 0 
+01:C093 00
+01:C094 00
+01:C095 00
+01:C096 00
+01:C097 C9              	   128:     ret
+                        	   129: 
+                        	   130: _new_interrupt_hook:
+01:C098 C369C0          	   131:     jp _run_interrupt
+01:C09B C9              	   132:     ret
+01:C09C 00              	   133:     nop
+                        	   134: 
+                        	   135: _update_rain_state:
+                        	   136:     ; Update the rain state for a random column. The state can be 0 (no rain) or 1 (rain). 
+                        	   137:     ; First, test if we activate a new rain drop with probability 1/p_rain.
+01:C09D 3E08            	   138:     ld a, P_RAIN
+01:C09F CDEAC1          	   139:     call _rnd8
+01:C0A2 FE01            	   140:     cp 1
+01:C0A4 C2E3C0          	   141:     jp nz, __update_rain_state_ret
+                        	   142:     ; get a random column
+01:C0A7 3E20            	   143:     ld a, WIDTH
+01:C0A9 CDEAC1          	   144:     call _rnd8
+                        	   145:     ; get the address of _drop_state for column i.
+01:C0AC 3D              	   146:     dec a                       ; a = 0..WIDTH-1
+01:C0AD 1600            	   147:     ld d, 0
+01:C0AF 5F              	   148:     ld e, a
+01:C0B0 2126C3          	   149:     ld hl, _drop_state
+01:C0B3 19              	   150:     add hl, de
+                        	   151:     ; get current drop state for col i
+01:C0B4 7E              	   152:     ld a, (hl)
+01:C0B5 FE00            	   153:     cp 0
+01:C0B7 C2E3C0          	   154:     jp nz, __update_rain_state_ret ; if drop state is 1, skip
+                        	   155:     ; set drop state to true for this column
+01:C0BA 34              	   156:     inc (hl)
+                        	   157:     ; set a random drop speed
+01:C0BB 2146C3          	   158:     ld hl, _drop_speed
+01:C0BE 19              	   159:     add hl, de                  ; hl = &drop_speed[i]
+01:C0BF 3E08            	   160:     ld a, SPEED_VAR
+01:C0C1 E5              	   161:     push hl
+01:C0C2 CDEAC1          	   162:     call _rnd8
+01:C0C5 E1              	   163:     pop hl
+01:C0C6 77              	   164:     ld (hl), a
+                        	   165:     ; set drop speed counter to 0
+01:C0C7 2166C3          	   166:     ld hl, _drop_speed_counter
+01:C0CA 19              	   167:     add hl, de
+01:C0CB 3E00            	   168:     ld a, 0
+01:C0CD 77              	   169:     ld (hl), a
+                        	   170:     ; set drop start to 0
+01:C0CE 2186C3          	   171:     ld hl, _drop_start
+01:C0D1 19              	   172:     add hl, de
+01:C0D2 3E00            	   173:     ld a, 0
+01:C0D4 77              	   174:     ld (hl), a
+                        	   175:     ; set drop length, range = [HEIGHT/2 .. HEIGHT]
+01:C0D5 21A6C3          	   176:     ld hl, _drop_length
+01:C0D8 19              	   177:     add hl, de
+01:C0D9 E5              	   178:     push hl
+01:C0DA 3E0C            	   179:     ld a, HHEIGHT
+01:C0DC CDEAC1          	   180:     call _rnd8
+01:C0DF E1              	   181:     pop hl
+01:C0E0 C60C            	   182:     add a, HHEIGHT
+01:C0E2 77              	   183:     ld (hl), a
+                        	   184: __update_rain_state_ret:
+01:C0E3 C9              	   185:     ret
+                        	   186: 
+                        	   187: _update_rain_columns:
+01:C0E4 0620            	   188:     ld b, WIDTH
+01:C0E6 2600            	   189:     ld h, 0
+01:C0E8 68              	   190:     ld l, b
+01:C0E9 2224C3          	   191:     ld (_COL), hl
+                        	   192: __update_rain_columns_loop:
+01:C0EC C5              	   193:     push bc
+01:C0ED ED5B24C3        	   194:     ld de, (_COL)
+01:C0F1 1B              	   195:     dec de
+01:C0F2 ED5324C3        	   196:     ld (_COL), de
+01:C0F6 2126C3          	   197:     ld hl, _drop_state 
+01:C0F9 19              	   198:     add hl, de                  ; hl = &drop_state[i]
+01:C0FA 7E              	   199:     ld a, (hl)                  ; a = drop_state[i]
+01:C0FB FE00            	   200:     cp 0                        ; if (drop_state[i] == 0)
+01:C0FD CA17C1          	   201:     jp z, __update_rain_columns_continue ; skip, no rain here.
+01:C100 2146C3          	   202:     ld hl, _drop_speed
+01:C103 19              	   203:     add hl, de                  ; hl = &drop_speed[i]
+01:C104 7E              	   204:     ld a, (hl)
+01:C105 4F              	   205:     ld c, a                     ; c = drop_speed[i]
+01:C106 2166C3          	   206:     ld hl, _drop_speed_counter
+01:C109 19              	   207:     add hl, de                  ; hl = &drop_speed_counter[i]
+01:C10A 7E              	   208:     ld a, (hl)                  ; a = drop_speed_counter[i]
+01:C10B 91              	   209:     sub c                       ; a = drop_speed_counter[i] - drop_speed[i]
+01:C10C 3004            	   210:     jr nc, __update_rain_column_i
+01:C10E 34              	   211:     inc (hl)                    ; drop_speed_counter[i]++
+01:C10F C317C1          	   212:     jp __update_rain_columns_continue
+                        	   213: __update_rain_column_i:
+01:C112 3600            	   214:     ld (hl), 0                  ; drop_speed_counter[i] = 0
+01:C114 CD1BC1          	   215:     call _update_rain_column
+                        	   216: __update_rain_columns_continue:
+01:C117 C1              	   217:     pop bc
+01:C118 10D2            	   218:     djnz __update_rain_columns_loop
+01:C11A C9              	   219:     ret
+                        	   220: 
+                        	   221: _update_rain_column:
+                        	   222:     ; Advance the rain drop in column i
+01:C11B ED5B24C3        	   223:     ld de, (_col)               ; de = i
+                        	   224:     ; start = _drop_start[i]
+01:C11F 2186C3          	   225:     ld hl, _drop_start
+01:C122 19              	   226:     add hl, de
+01:C123 7E              	   227:     ld a, (hl)
+01:C124 3221C3          	   228:     ld (_start), a
+                        	   229:     ; length = _drop_length[i]
+01:C127 21A6C3          	   230:     ld hl, _drop_length
+01:C12A 19              	   231:     add hl, de
+01:C12B 7E              	   232:     ld a, (hl)
+01:C12C 3222C3          	   233:     ld (_length), a
+                        	   234:     ; end = start - length
+01:C12F 3A22C3          	   235:     ld a, (_length)
+01:C132 47              	   236:     ld b, a
+01:C133 3A21C3          	   237:     ld a, (_start)
+01:C136 90              	   238:     sub b
+                        	   239:     ; if (start - length < 0)
+01:C137 3805            	   240:     jr c, __then_end_is_zero
+                        	   241: __else_end_eq_start_min_length:
+01:C139 3223C3          	   242:     ld (_end), a
+01:C13C 1805            	   243:     jr __update_rain_column_continue
+                        	   244: __then_end_is_zero:
+01:C13E 3E00            	   245:     ld a, 0
+01:C140 3223C3          	   246:     ld (_end), a
+                        	   247: __update_rain_column_continue:
+                        	   248:     ; if (end > HEIGHT)
+01:C143 3A23C3          	   249:     ld a, (_end)
+01:C146 D619            	   250:     sub HEIGHT + 1
+01:C148 300F            	   251:     jr nc, __reset_all_states_for_column
+                        	   252:     ; else update the drop state
+01:C14A CD7CC1          	   253:     call _update_rain_column_chars
+                        	   254:     ; drop_start[i]++
+01:C14D 2186C3          	   255:     ld hl, _drop_start
+01:C150 ED5B24C3        	   256:     ld de, (_col)
+01:C154 19              	   257:     add hl, de
+01:C155 34              	   258:     inc (hl)
+01:C156 C37BC1          	   259:     jp __update_rain_column_ret
+                        	   260: __reset_all_states_for_column:
+01:C159 ED5B24C3        	   261:     ld de, (_col)
+01:C15D 2126C3          	   262:     ld hl, _drop_state
+01:C160 19              	   263:     add hl, de
+01:C161 3600            	   264:     ld (hl), 0
+01:C163 2146C3          	   265:     ld hl, _drop_speed
+01:C166 19              	   266:     add hl, de
+01:C167 3600            	   267:     ld (hl), 0
+01:C169 2166C3          	   268:     ld hl, _drop_speed_counter
+01:C16C 19              	   269:     add hl, de
+01:C16D 3600            	   270:     ld (hl), 0
+01:C16F 2186C3          	   271:     ld hl, _drop_start
+01:C172 19              	   272:     add hl, de
+01:C173 3600            	   273:     ld (hl), 0
+01:C175 21A6C3          	   274:     ld hl, _drop_length
+01:C178 19              	   275:     add hl, de
+01:C179 3600            	   276:     ld (hl), 0
+                        	   277: __update_rain_column_ret:
+01:C17B C9              	   278:     ret
+                        	   279: 
+                        	   280: _update_rain_column_chars:
+                        	   281:     ; Add a character at the start of the rain trail.
+                        	   282:     ; if (start > height), skip add character.
+01:C17C 3A21C3          	   283:     ld a, (_start)
+01:C17F D618            	   284:     sub HEIGHT
+01:C181 3016            	   285:     jr nc, __update_rain_column_chars_continue
+01:C183 3A21C3          	   286:     ld a, (_start)
+01:C186 4F              	   287:     ld c, a                 ; c = row
+01:C187 3A24C3          	   288:     ld a, (_col)
+01:C18A 47              	   289:     ld b, a                 ; b = col
+01:C18B CD06C2          	   290:     call _get_index         ; hl = k = y * WIDTH + x
+01:C18E EB              	   291:     ex de, hl               ; de = k
+                        	   292:     ; update the character at k in the name table buffer
+01:C18F 21C6C3          	   293:     ld hl, _name_table_buffer
+01:C192 19              	   294:     add hl, de
+01:C193 E5              	   295:     push hl
+01:C194 CDE2C1          	   296:     call _get_char
+01:C197 E1              	   297:     pop hl
+01:C198 77              	   298:     ld (hl), a
+                        	   299: __update_rain_column_chars_continue:
+                        	   300:     ; Remove a character at the end of the rain trail.
+                        	   301:     ; if (end > 1), continue 
+01:C199 3A23C3          	   302:     ld a, (_end)
+01:C19C D601            	   303:     sub 1
+01:C19E 3814            	   304:     jr c, __update_rain_column_chars_ret
+01:C1A0 3A23C3          	   305:     ld a, (_end)
+01:C1A3 3D              	   306:     dec a
+01:C1A4 4F              	   307:     ld c, a                 ; c = row
+01:C1A5 3A24C3          	   308:     ld a, (_col)
+01:C1A8 47              	   309:     ld b, a                 ; b = col
+01:C1A9 CD06C2          	   310:     call _get_index         ; hl = k = y * WIDTH + x
+01:C1AC EB              	   311:     ex de, hl               ; de = k
+                        	   312:     ; update the character at k in the name table buffer
+01:C1AD 21C6C3          	   313:     ld hl, _name_table_buffer
+01:C1B0 19              	   314:     add hl, de
+01:C1B1 3E20            	   315:     ld a, $20
+01:C1B3 77              	   316:     ld (hl), a
+                        	   317: __update_rain_column_chars_ret:
+01:C1B4 C9              	   318:     ret
+                        	   319: 
+                        	   320: _update_rnd_char:
+01:C1B5 0601            	   321:     ld b, N_PERM
+01:C1B7 0E03            	   322:     ld c, 3
+                        	   323: __update_rnd_char_outer_loop:
+01:C1B9 C5              	   324:     push bc
+                        	   325: __update_rnd_char_inner_loop:
+01:C1BA 3EFF            	   326:     ld a, $ff                   ; get a random offset in the 1/3 part of the screen
+01:C1BC C5              	   327:     push bc
+01:C1BD CDEAC1          	   328:     call _rnd8
+01:C1C0 C1              	   329:     pop bc
+01:C1C1 0D              	   330:     dec c
+01:C1C2 51              	   331:     ld d, c                     ; d = 0..2, offset to the 1/3 part of the screen 
+01:C1C3 5F              	   332:     ld e, a                     ; e = 0..255, offset in the 1/3 part of the screen
+01:C1C4 21C6C3          	   333:     ld hl, _name_table_buffer
+01:C1C7 19              	   334:     add hl, de
+01:C1C8 7E              	   335:     ld a, (hl)
+                        	   336:     ; if (a == ' '), do nothing
+01:C1C9 FE20            	   337:     cp $20                      
+01:C1CB CAD6C1          	   338:     jp z, __update_rnd_char_inner_loop_next
+                        	   339:     ; else replace the character with a random character
+01:C1CE C5              	   340:     push bc
+01:C1CF E5              	   341:     push hl
+01:C1D0 CDE2C1          	   342:     call _get_char
+01:C1D3 E1              	   343:     pop hl
+01:C1D4 C1              	   344:     pop bc
+01:C1D5 77              	   345:     ld (hl), a
+                        	   346: __update_rnd_char_inner_loop_next:
+01:C1D6 79              	   347:     ld a, c
+01:C1D7 FE00            	   348:     cp 0
+01:C1D9 C2BAC1          	   349:     jp nz, __update_rnd_char_inner_loop
+01:C1DC C1              	   350:     pop bc
+01:C1DD 0E02            	   351:     ld c, 2
+01:C1DF 10D8            	   352:     djnz __update_rnd_char_outer_loop
+01:C1E1 C9              	   353:     ret
+                        	   354: 
+                        	   355: _get_char:
+                        	   356:     ; Get a random character from the printable character set.
+                        	   357:     ; in:  none
+                        	   358:     ; out: a = random character
+                        	   359:     ; registers: af, bc, hl
+01:C1E2 3E9F            	   360:     ld a, 159
+01:C1E4 CDEAC1          	   361:     call _rnd8
+01:C1E7 C621            	   362:     add 33
+01:C1E9 C9              	   363:     ret
+                        	   364: 
+                        	   365: _rnd8:
+                        	   366:     ; Get a random value in the range [1..a]
+                        	   367:     ; in:  a = max value
+                        	   368:     ; out: a = random value
+                        	   369:     ; registers: bc, hl
+01:C1EA F5              	   370:     push af
+01:C1EB 3A1CC2          	   371:     ld a, (_rnd8_idx)
+01:C1EE 3C              	   372:     inc a                ; the lookup table is 256 bytes long, overflow is ok.
+01:C1EF 4F              	   373:     ld c, a
+01:C1F0 3A9EFC          	   374:     ld a, (JIFFY)        ; use the low byte of the jiffy counter as a seed
+01:C1F3 81              	   375:     add c                ; add the seed to the index
+01:C1F4 321CC2          	   376:     ld (_rnd8_idx), a    
+01:C1F7 211EC2          	   377:     ld hl, _rnd8_data    ; start address lookup table
+01:C1FA 0600            	   378:     ld b, 0
+01:C1FC 4F              	   379:     ld c, a              ; current offset
+01:C1FD 09              	   380:     add hl, bc           ; hl is now the address of the random value
+01:C1FE F1              	   381:     pop af
+01:C1FF 47              	   382:     ld b, a              ; b = max value
+01:C200 7E              	   383:     ld a, (hl)           ; get the random value
+                        	   384: _rnd8_rrange:
+01:C201 90              	   385:     sub b                ; we need 0-rval only
+01:C202 30FD            	   386:     jr nc, _rnd8_rrange  ; repeat unitl within range of value
+01:C204 88              	   387:     adc a, b             ; undo last subtraction, range 1-rval
+01:C205 C9              	   388:     ret
+                        	   389: 
+                        	   390: 
+                        	   391: _get_index:
+                        	   392:     ; Get relative position in memory
+                        	   393:     ; compute y * WIDTH + x (naive implementation)
+                        	   394:     ; in:   bc = (x, y), b = col, c = row
+                        	   395:     ;       x = 0..31, y = 0..23
+                        	   396:     ; out:  hl = k = y * WIDTH + x
+                        	   397:     ; registers: af, bc, hl
+                        	   398:     ;
+                        	   399:     ; load y coordinate in low byte
+01:C206 69              	   400:     ld l, c
+01:C207 AF              	   401:     xor a
+                        	   402:     ; multiply y by COLS, shift L left 5 times, push overflow in H
+01:C208 CB25            	   403:     sla l
+01:C20A 17              	   404:     rla
+01:C20B CB25            	   405:     sla l
+01:C20D 17              	   406:     rla
+01:C20E CB25            	   407:     sla l
+01:C210 17              	   408:     rla
+01:C211 CB25            	   409:     sla l
+01:C213 17              	   410:     rla
+01:C214 CB25            	   411:     sla l
+01:C216 17              	   412:     rla
+01:C217 67              	   413:     ld h, a
+                        	   414:     ; Add the x coordinate in the low byte
+01:C218 78              	   415:     ld a, b
+01:C219 B5              	   416:     or l
+01:C21A 6F              	   417:     ld l, a
+01:C21B C9              	   418:     ret
+                        	   419: 
+                        	   420: 
+                        	   421: _rnd8_idx:
+01:C21C 00              	   422:     db $00
+                        	   423: _rnd8_idx_max:
+01:C21D FF              	   424:     db $ff
+                        	   425: _rnd8_data:
+01:C21E D8              	   426:     db $d8, $d1, $8a, $01, $b4, $7c, $9c, $ae
+01:C21F D1
+01:C220 8A
+01:C221 01
+01:C222 B4
+01:C223 7C
+01:C224 9C
+01:C225 AE
+01:C226 45              	   427:     db $45, $3e, $50, $96, $bb, $e3, $a2, $66
+01:C227 3E
+01:C228 50
+01:C229 96
+01:C22A BB
+01:C22B E3
+01:C22C A2
+01:C22D 66
+01:C22E B7              	   428:     db $b7, $18, $8f, $fb, $0d, $f5, $1f, $09
+01:C22F 18
+01:C230 8F
+01:C231 FB
+01:C232 0D
+01:C233 F5
+01:C234 1F
+01:C235 09
+01:C236 2F              	   429:     db $2f, $1a, $a5, $dd, $9d, $75, $c8, $37
+01:C237 1A
+01:C238 A5
+01:C239 DD
+01:C23A 9D
+01:C23B 75
+01:C23C C8
+01:C23D 37
+01:C23E F9              	   430:     db $f9, $e4, $e9, $bf, $90, $6c, $ec, $5c
+01:C23F E4
+01:C240 E9
+01:C241 BF
+01:C242 90
+01:C243 6C
+01:C244 EC
+01:C245 5C
+01:C246 3B              	   431:     db $3b, $fe, $9f, $68, $15, $bc, $11, $e6
+01:C247 FE
+01:C248 9F
+01:C249 68
+01:C24A 15
+01:C24B BC
+01:C24C 11
+01:C24D E6
+01:C24E B6              	   432:     db $b6, $f7, $ee, $86, $7e, $29, $d0, $54
+01:C24F F7
+01:C250 EE
+01:C251 86
+01:C252 7E
+01:C253 29
+01:C254 D0
+01:C255 54
+01:C256 55              	   433:     db $55, $a6, $44, $33, $56, $3c, $c3, $c7
+01:C257 A6
+01:C258 44
+01:C259 33
+01:C25A 56
+01:C25B 3C
+01:C25C C3
+01:C25D C7
+01:C25E BE              	   434:     db $be, $b8, $25, $77, $93, $b2, $8b, $41
+01:C25F B8
+01:C260 25
+01:C261 77
+01:C262 93
+01:C263 B2
+01:C264 8B
+01:C265 41
+01:C266 6E              	   435:     db $6e, $3a, $64, $b9, $aa, $ab, $5d, $d2
+01:C267 3A
+01:C268 64
+01:C269 B9
+01:C26A AA
+01:C26B AB
+01:C26C 5D
+01:C26D D2
+01:C26E 0A              	   436:     db $0a, $af, $eb, $0b, $6a, $c1, $f3, $7a
+01:C26F AF
+01:C270 EB
+01:C271 0B
+01:C272 6A
+01:C273 C1
+01:C274 F3
+01:C275 7A
+01:C276 AD              	   437:     db $ad, $b5, $bd, $c6, $7d, $0e, $98, $b1
+01:C277 B5
+01:C278 BD
+01:C279 C6
+01:C27A 7D
+01:C27B 0E
+01:C27C 98
+01:C27D B1
+01:C27E FA              	   438:     db $fa, $63, $9e, $c5, $21, $57, $79, $03
+01:C27F 63
+01:C280 9E
+01:C281 C5
+01:C282 21
+01:C283 57
+01:C284 79
+01:C285 03
+01:C286 FD              	   439:     db $fd, $71, $d5, $c9, $ff, $db, $2a, $08
+01:C287 71
+01:C288 D5
+01:C289 C9
+01:C28A FF
+01:C28B DB
+01:C28C 2A
+01:C28D 08
+01:C28E 67              	   440:     db $67, $8e, $fc, $07, $e7, $31, $a8, $de
+01:C28F 8E
+01:C290 FC
+01:C291 07
+01:C292 E7
+01:C293 31
+01:C294 A8
+01:C295 DE
+01:C296 94              	   441:     db $94, $6d, $91, $1e, $4b, $ce, $82, $0f
+01:C297 6D
+01:C298 91
+01:C299 1E
+01:C29A 4B
+01:C29B CE
+01:C29C 82
+01:C29D 0F
+01:C29E 83              	   442:     db $83, $26, $1b, $b3, $5e, $81, $69, $da
+01:C29F 26
+01:C2A0 1B
+01:C2A1 B3
+01:C2A2 5E
+01:C2A3 81
+01:C2A4 69
+01:C2A5 DA
+01:C2A6 61              	   443:     db $61, $9a, $e1, $4d, $32, $59, $38, $27
+01:C2A7 9A
+01:C2A8 E1
+01:C2A9 4D
+01:C2AA 32
+01:C2AB 59
+01:C2AC 38
+01:C2AD 27
+01:C2AE 46              	   444:     db $46, $3d, $13, $a0, $cd, $ea, $39, $d3
+01:C2AF 3D
+01:C2B0 13
+01:C2B1 A0
+01:C2B2 CD
+01:C2B3 EA
+01:C2B4 39
+01:C2B5 D3
+01:C2B6 51              	   445:     db $51, $34, $80, $6f, $a4, $7f, $49, $05
+01:C2B7 34
+01:C2B8 80
+01:C2B9 6F
+01:C2BA A4
+01:C2BB 7F
+01:C2BC 49
+01:C2BD 05
+01:C2BE 5F              	   446:     db $5f, $5a, $74, $df, $5b, $2b, $48, $89
+01:C2BF 5A
+01:C2C0 74
+01:C2C1 DF
+01:C2C2 5B
+01:C2C3 2B
+01:C2C4 48
+01:C2C5 89
+01:C2C6 17              	   447:     db $17, $ba, $62, $8d, $dc, $78, $c2, $06
+01:C2C7 BA
+01:C2C8 62
+01:C2C9 8D
+01:C2CA DC
+01:C2CB 78
+01:C2CC C2
+01:C2CD 06
+01:C2CE C4              	   448:     db $c4, $16, $d4, $0c, $76, $f4, $65, $ef
+01:C2CF 16
+01:C2D0 D4
+01:C2D1 0C
+01:C2D2 76
+01:C2D3 F4
+01:C2D4 65
+01:C2D5 EF
+01:C2D6 A1              	   449:     db $a1, $4a, $e2, $95, $f1, $b0, $9b, $19
+01:C2D7 4A
+01:C2D8 E2
+01:C2D9 95
+01:C2DA F1
+01:C2DB B0
+01:C2DC 9B
+01:C2DD 19
+01:C2DE 60              	   450:     db $60, $7b, $2e, $f0, $1c, $72, $88, $30
+01:C2DF 7B
+01:C2E0 2E
+01:C2E1 F0
+01:C2E2 1C
+01:C2E3 72
+01:C2E4 88
+01:C2E5 30
+01:C2E6 8C              	   451:     db $8c, $24, $99, $02, $d7, $84, $43, $ac
+01:C2E7 24
+01:C2E8 99
+01:C2E9 02
+01:C2EA D7
+01:C2EB 84
+01:C2EC 43
+01:C2ED AC
+01:C2EE C0              	   452:     db $c0, $97, $70, $12, $a9, $42, $cc, $4f
+01:C2EF 97
+01:C2F0 70
+01:C2F1 12
+01:C2F2 A9
+01:C2F3 42
+01:C2F4 CC
+01:C2F5 4F
+01:C2F6 1D              	   453:     db $1d, $4e, $cf, $87, $e0, $f2, $2d, $04
+01:C2F7 4E
+01:C2F8 CF
+01:C2F9 87
+01:C2FA E0
+01:C2FB F2
+01:C2FC 2D
+01:C2FD 04
+01:C2FE E5              	   454:     db $e5, $23, $58, $10, $85, $a7, $47, $35
+01:C2FF 23
+01:C300 58
+01:C301 10
+01:C302 85
+01:C303 A7
+01:C304 47
+01:C305 35
+01:C306 28              	   455:     db $28, $73, $53, $d6, $ed, $14, $52, $22
+01:C307 73
+01:C308 53
+01:C309 D6
+01:C30A ED
+01:C30B 14
+01:C30C 52
+01:C30D 22
+01:C30E 2C              	   456:     db $2c, $40, $36, $3f, $92, $6b, $f6, $cb
+01:C30F 40
+01:C310 36
+01:C311 3F
+01:C312 92
+01:C313 6B
+01:C314 F6
+01:C315 CB
+01:C316 F8              	   457:     db $f8, $00, $ca, $d9, $e8, $4c, $20, $a3
+01:C317 00
+01:C318 CA
+01:C319 D9
+01:C31A E8
+01:C31B 4C
+01:C31C 20
+01:C31D A3
+                        	   458: 
+                        	   459: ; request render
+                        	   460: _request_render:
+01:C31E 00              	   461:     db 0
+                        	   462: ; flag that indicates if the system needs more time than the requested 
+                        	   463: ; refresh rate.
+                        	   464: _is_slow:
+01:C31F 00              	   465:     db 0
+                        	   466: _interrupt_counter:
+01:C320 00              	   467:     db 0
+                        	   468: ; variables for updating a column. 
+                        	   469: _start:
+01:C321 00              	   470:     db 0
+                        	   471: _length:
+01:C322 00              	   472:     db 0
+                        	   473: _end:
+01:C323 00              	   474:     db 0
+                        	   475: ; reserve 2 bytes for the column index, so that we can fetch it conveniently
+                        	   476: ; with an 8bit or 16bit register.
+                        	   477: _col:
+01:C324 0000            	   478:     dw 0                        
+                        	   479: 
+                        	   480: ; State arrays for the rain drops, one state for each column.
+                        	   481: _drop_state:
+01:C326 00              	   482:     ds WIDTH, 0
+01:C327 *
+                        	   483: _drop_speed:
+01:C346 00              	   484:     ds WIDTH, 0
+01:C347 *
+                        	   485: _drop_speed_counter:
+01:C366 00              	   486:     ds WIDTH, 0
+01:C367 *
+                        	   487: _drop_start:
+01:C386 00              	   488:     ds WIDTH, 0
+01:C387 *
+                        	   489: _drop_length:
+01:C3A6 00              	   490:     ds WIDTH, 0
+01:C3A7 *
+                        	   491: _name_table_buffer:
+01:C3C6 20              	   492:     ds WIDTH*HEIGHT, $20
+01:C3C7 *
+                        	   493: _color_table_buffer:
+01:C6C6 21              	   494:     ds WIDTH*HEIGHT, $21
+01:C6C7 *
+                        	   495: 
+                        	   496: 
+                        	   497: _file_end:
+                        	   498: 
+
+
+Symbols by name:
+__breakx                         A:C00E
+__else_end_eq_start_min_length   A:C139
+__reset_all_states_for_column    A:C159
+__then_end_is_zero               A:C13E
+__update_rain_column_chars_continue  A:C199
+__update_rain_column_chars_ret   A:C1B4
+__update_rain_column_continue    A:C143
+__update_rain_column_i           A:C112
+__update_rain_column_ret         A:C17B
+__update_rain_columns_continue   A:C117
+__update_rain_columns_loop       A:C0EC
+__update_rain_state_ret          A:C0E3
+__update_rnd_char_inner_loop     A:C1BA
+__update_rnd_char_inner_loop_next  A:C1D6
+__update_rnd_char_outer_loop     A:C1B9
+_app_constants                   A:C000
+_cleanup                         A:C047
+_COL                             A:C324
+_color_table_buffer              A:C6C6
+_draw                            A:C05C
+_drop_length                     A:C3A6
+_drop_speed                      A:C346
+_drop_speed_counter              A:C366
+_drop_start                      A:C386
+_drop_state                      A:C326
+_end                             A:C323
+_file_end                        A:C9C6
+_file_start                      A:C000
+_get_char                        A:C1E2
+_get_index                       A:C206
+_interrupt_counter               A:C320
+_is_slow                         A:C31F
+_length                          A:C322
+_main                            A:C000
+_main_loop                       A:C003
+_name_table_buffer               A:C3C6
+_new_interrupt_hook              A:C098
+_old_interrupt_hook              A:C092
+_request_render                  A:C31E
+_rnd8                            A:C1EA
+_rnd8_data                       A:C21E
+_rnd8_idx                        A:C21C
+_rnd8_idx_max                    A:C21D
+_rnd8_rrange                     A:C201
+_run_interrupt                   A:C069
+_set_is_slow                     A:C088
+_setup                           A:C017
+_start                           A:C321
+_update                          A:C04D
+_update_rain_column              A:C11B
+_update_rain_column_chars        A:C17C
+_update_rain_columns             A:C0E4
+_update_rain_state               A:C09D
+_update_rnd_char                 A:C1B5
+BAKCLR                           E:F3EA
+BDRCLR                           E:F3EB
+BREAKX                           E:00B7
+CHGCLR                           E:0062
+CHGMOD                           E:005F
+FORCLR                           E:F3E9
+HEIGHT                           E:0018
+HHEIGHT                          E:000C
+HTIMI                            E:FD9F
+JIFFY                            E:FC9E
+LDIRVM                           E:005C
+N_PERM                           E:0001
+NAME_TABLE                       E:1800
+ORGADR                           E:C000
+P_RAIN                           E:0008
+SCREENMODE                       E:0001
+SPEED_VAR                        E:0008
+WAIT_CYCLES                      E:0001
+WIDTH                            E:0020
+
+Symbols by value:
+0001 N_PERM
+0001 WAIT_CYCLES
+0001 SCREENMODE
+0008 SPEED_VAR
+0008 P_RAIN
+000C HHEIGHT
+0018 HEIGHT
+0020 WIDTH
+005C LDIRVM
+005F CHGMOD
+0062 CHGCLR
+00B7 BREAKX
+1800 NAME_TABLE
+C000 _file_start
+C000 _main
+C000 _app_constants
+C000 ORGADR
+C003 _main_loop
+C00E __breakx
+C017 _setup
+C047 _cleanup
+C04D _update
+C05C _draw
+C069 _run_interrupt
+C088 _set_is_slow
+C092 _old_interrupt_hook
+C098 _new_interrupt_hook
+C09D _update_rain_state
+C0E3 __update_rain_state_ret
+C0E4 _update_rain_columns
+C0EC __update_rain_columns_loop
+C112 __update_rain_column_i
+C117 __update_rain_columns_continue
+C11B _update_rain_column
+C139 __else_end_eq_start_min_length
+C13E __then_end_is_zero
+C143 __update_rain_column_continue
+C159 __reset_all_states_for_column
+C17B __update_rain_column_ret
+C17C _update_rain_column_chars
+C199 __update_rain_column_chars_continue
+C1B4 __update_rain_column_chars_ret
+C1B5 _update_rnd_char
+C1B9 __update_rnd_char_outer_loop
+C1BA __update_rnd_char_inner_loop
+C1D6 __update_rnd_char_inner_loop_next
+C1E2 _get_char
+C1EA _rnd8
+C201 _rnd8_rrange
+C206 _get_index
+C21C _rnd8_idx
+C21D _rnd8_idx_max
+C21E _rnd8_data
+C31E _request_render
+C31F _is_slow
+C320 _interrupt_counter
+C321 _start
+C322 _length
+C323 _end
+C324 _COL
+C326 _drop_state
+C346 _drop_speed
+C366 _drop_speed_counter
+C386 _drop_start
+C3A6 _drop_length
+C3C6 _name_table_buffer
+C6C6 _color_table_buffer
+C9C6 _file_end
+F3E9 FORCLR
+F3EA BAKCLR
+F3EB BDRCLR
+FC9E JIFFY
+FD9F HTIMI
