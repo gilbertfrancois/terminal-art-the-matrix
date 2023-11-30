@@ -1,6 +1,7 @@
 # Created by https://www.toptal.com/developers/gitignore/api/c,c++,vim,linux,windows,macos,clion+all,cmake
 # Edit at https://www.toptal.com/developers/gitignore?templates=c,c++,vim,linux,windows,macos,clion+all,cmake
 
+/c/build
 ### C ###
 # Prerequisites
 *.d
@@ -168,7 +169,6 @@ CMakeCache.txt
 CMakeFiles
 CMakeScripts
 Testing
-Makefile
 cmake_install.cmake
 install_manifest.txt
 compile_commands.json
