@@ -10,11 +10,11 @@ Welcome to an exploration of the iconic digital rain effect, inspired by the mes
 
 The digital rain, a cascade of green characters raining down the screen, has become an emblematic symbol synonymous with futuristic aesthetics. Recreating this effect in C and Assembly allows us to not only pay homage to a cinematic marvel but also delve into the artistry of programming. Through careful manipulation of terminal output, we simulate the immersive and captivating visual experience reminiscent of the Matrix's iconic scenes.
 
-| ![macOS](_assets/screenshots/macos.png)   | ![Windows](_assets/screenshots/windows.png)                  |
-| ----------------------------------------- | ------------------------------------------------------------ |
-| *iTerm on macOS*                          | *CMD on Windows*                                             |
-| ![Linux](_assets/screenshots/linux2x.png) | ![MSX](/Users/gilbert/Development/git/terminal-art-the-matrix/_assets/screenshots/msx.png) |
-| *Terminal on Linux*                       | MSX                                                          |
+| ![macOS](_assets/screenshots/macos.png)   | ![Windows](_assets/screenshots/windows.png) |
+| ----------------------------------------- | ------------------------------------------- |
+| *iTerm on macOS*                          | *CMD on Windows*                            |
+| ![Linux](_assets/screenshots/linux2x.png) | ![MSX](_assets/screenshots/msx.png)         |
+| *Terminal on Linux*                       | MSX                                         |
 
 
 
