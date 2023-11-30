@@ -124,3 +124,17 @@ When you don't own a MSX computer, you can use an emulator like [openMSX](https:
 
 If you don't like the hassle of compiling it yourself, then go to the [Releases](https://github.com/gilbertfrancois/terminal-art-the-matrix/releases) page and download the precompiled binary for the MSX system.
 
+
+
+## References
+
+- [Hackaday project page](https://hackaday.io/project/193853-the-matrix-digital-rain-effect-in-c-and-asm)
+- [Journey into MSX Z80 Assembly programming](https://gilbertfrancois.github.io)
+
+- [Programming the Z80, Zaks](https://www.amazon.com/Programming-Z80-Rodnay-Zaks/dp/0895880695)
+
+- [Learn Multiplatform Assembly Programming with ChibiAkumas, Volume 1](https://www.amazon.com/Learn-Multiplatform-Assembly-Programming-ChibiAkumas/dp/B08W7DWZB3/)
+
+- [Learn Multiplatform Assembly Programming with ChibiAkumas, Volume 2](https://www.amazon.com/Learn-Multiplatform-Assembly-Programming-ChibiAkumas/dp/B09VWHYDKJ/)
+
+  
