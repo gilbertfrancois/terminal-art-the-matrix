@@ -1,16 +1,17 @@
-//   Copyright 2023 Gilbert Francois Duivesteijn
-//
-//   Licensed under the Apache License, Version 2.0 (the "License");
-//   you may not use this file except in compliance with the License.
-//   You may obtain a copy of the License at
-//
-//       http://www.apache.org/licenses/LICENSE-2.0
-//
-//   Unless required by applicable law or agreed to in writing, software
-//   distributed under the License is distributed on an "AS IS" BASIS,
-//   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//   See the License for the specific language governing permissions and
-//   limitations under the License.
+/*   Copyright 2023 Gilbert Francois Duivesteijn
+ *
+ *   Licensed under the Apache License, Version 2.0 (the "License");
+ *   you may not use this file except in compliance with the License.
+ *   You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *   Unless required by applicable law or agreed to in writing, software
+ *   distributed under the License is distributed on an "AS IS" BASIS,
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *   See the License for the specific language governing permissions and
+ *   limitations under the License.
+ */
 
 #include "matrix.h"
 #include <signal.h>
@@ -21,9 +22,9 @@
 #else
 #include <sys/ioctl.h>
 #include <unistd.h>
+#include <time.h>
 #endif
 
-int is_running = 1;
 int width = 80;
 int height = 24;
 int n_permutations = 12;
@@ -42,7 +43,7 @@ char *colortable_buffer;
 void setup(void) {
 
     get_terminal_size();
-    // Change probability of rain and darktrail based on terminal size.
+    /* Change probability of rain and darktrail based on terminal size. */
     n_permutations = height / 2;
     p_rain = width / 16;
     n_darktrail = height / 8;
@@ -179,7 +180,7 @@ void draw(void) {
         if (row < height - 1) {
             printf("\033[0m\n");
         }
-        // Hide cursor.
+        /* Hide cursor. */
         printf("\033[?25l");
     }
 }
@@ -231,6 +232,15 @@ void get_terminal_size(void) {
     ioctl(STDIN_FILENO, TIOCGSIZE, &ts);
     term_cols = ts.ts_cols;
     term_rows = ts.ts_lines;
+#elif defined(WIOCGETD)
+    struct uwdata w;
+    ioctl(STDOUT_FILENO, WIOCGETD, &w);
+    if(w.uw_vs) {
+        term_rows = w.uw_height / w.uw_vs;
+    }
+    if(w.uw_hs) {
+        term_cols = w.uw_width / w.uw_hs;
+    }
 #elif defined(TIOCGWINSZ)
     struct winsize ts;
     ioctl(STDIN_FILENO, TIOCGWINSZ, &ts);
@@ -243,24 +253,28 @@ void get_terminal_size(void) {
     }
 }
 
-void signal_handler(int signal) { is_running = 0; }
+void exit_message(void) {
+    /* Reset colors and cursor. */
+    printf("\033[0m\033[?25h\n");
+    printf("\nFollow the white rabbit...\n");
+}
 
 int main(int argc, char *argv[]) {
-    signal(SIGINT, signal_handler);
     setup();
-    while (is_running) {
+    atexit(free_memory);
+    atexit(exit_message);
+    signal(SIGINT, exit);
+    struct timespec rqtp;
+    rqtp.tv_sec = 0;
+    rqtp.tv_nsec = sleep_ms * 1000000;
+    for (;;) {
         update();
         draw();
 #if defined(_WIN32)
         Sleep(sleep_ms);
 #else
-        usleep(sleep_ms * 1000);
+        nanosleep(&rqtp, NULL);
 #endif
     }
-    // User pressed Ctrl-C, end the event loop.
-    free_memory();
-    // Reset colors and cursor.
-    printf("\033[0m\033[?25h\n");
-    printf("\nFollow the white rabbit...\n");
-    exit(EXIT_SUCCESS);
+    return EXIT_SUCCESS;
 }

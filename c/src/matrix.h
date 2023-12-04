@@ -1,16 +1,20 @@
-//   Copyright 2023 Gilbert Francois Duivesteijn
-//
-//   Licensed under the Apache License, Version 2.0 (the "License");
-//   you may not use this file except in compliance with the License.
-//   You may obtain a copy of the License at
-//
-//       http://www.apache.org/licenses/LICENSE-2.0
-//
-//   Unless required by applicable law or agreed to in writing, software
-//   distributed under the License is distributed on an "AS IS" BASIS,
-//   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//   See the License for the specific language governing permissions and
-//   limitations under the License.
+/*   Copyright 2023 Gilbert Francois Duivesteijn
+ *
+ *   Licensed under the Apache License, Version 2.0 (the "License");
+ *   you may not use this file except in compliance with the License.
+ *   You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *   Unless required by applicable law or agreed to in writing, software
+ *   distributed under the License is distributed on an "AS IS" BASIS,
+ *   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *   See the License for the specific language governing permissions and
+ *   limitations under the License.
+ */
+
+#ifndef MATRIX_H
+#define MATRIX_H 1
 
 const char black = 30;
 const char red = 31;
@@ -109,8 +113,8 @@ int rnd(int max);
 char get_char(void);
 
 /**
- * Get the memory offset of a character in the screen buffer. 
- * 
+ * Get the memory offset of a character in the screen buffer.
+ *
  * @param row The row of the character.
  * @param col The column of the character.
  * @return The memory offset of the character.
@@ -123,10 +127,8 @@ const unsigned long get_index(int row, int col);
 void get_terminal_size(void);
 
 /**
- * Signal handler, called when the program receives a signal from the user
- * or OS. After receiving the signal, the program attempts to free the allocated
- * memory, reset the terminal and exit.
- *
- * @param signal The signal.
+ * Restore terminal settings and message. Called by stdlib's exit function.
  */
-void signal_handler(int signal);
+void exit_message(void);
+
+#endif
