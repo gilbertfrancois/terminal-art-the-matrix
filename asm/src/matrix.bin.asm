@@ -478,7 +478,7 @@ _update_in_progress:
 _draw_in_progress:
     db 0
 _interrupt_counter:
-    db 0
+    db 1
 ; variables for updating a column. 
 _start:
     db 0
