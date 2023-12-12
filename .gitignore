@@ -1,6 +1,7 @@
 # Created by https://www.toptal.com/developers/gitignore/api/c,c++,vim,linux,windows,macos,clion+all,cmake
 # Edit at https://www.toptal.com/developers/gitignore?templates=c,c++,vim,linux,windows,macos,clion+all,cmake
 
+/c/dist/
 /c/build
 ### C ###
 # Prerequisites
@@ -276,3 +277,5 @@ $RECYCLE.BIN/
 # End of https://www.toptal.com/developers/gitignore/api/c,c++,vim,linux,windows,macos,clion+all,cmake
 /build
 /dist
+/asm/build
+/asm/dist
