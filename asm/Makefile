@@ -1,7 +1,8 @@
 ASM="vasmz80_oldstyle"
 DIST_DIR="./dist"
 
-ASM_FLAGS=-Fbin -chklabels -nocase
+ASM_FLAGS=-Fbin -DDEBUG_TIMING=1 -chklabels -nocase
+# ASM_FLAGS=-Fbin -chklabels -nocase
 
 all: matrix matrix2
 
