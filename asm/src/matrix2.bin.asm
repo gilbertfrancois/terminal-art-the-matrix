@@ -80,11 +80,17 @@ _setup:
     ret
 
 _update:
+        ; Begin visual time measurement.
+        ld a, $26
+        call _debug_timing
     call _update_rain_state
     call _update_rain_columns
     ; call _update_rnd_char
     ld a, 0
     ld (_request_update), a
+        ; End visual time measurement.
+        ld a, $21
+        call _debug_timing
     ret
 
 _run_interrupt:
@@ -477,5 +483,16 @@ _color_table_buffer:
     include "src/lib_screen1.asm"
     include "src/lib_char_eu.asm"
 
+_debug_timing:
+    ifdef DEBUG_TIMING
+    and %00001111
+    or %00100000
+    di
+    out (VDPControl), a
+    ld a, %10000111
+    out (VDPControl), a
+    ei
+    endif
+    ret 
 
 _file_end:
