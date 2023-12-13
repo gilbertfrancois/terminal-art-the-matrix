@@ -506,7 +506,7 @@ _color_table_buffer:
 ; Add includes here, so they are out of the way at debugging.
     include "src/lib_vdp.asm"
     include "src/lib_screen1.asm"
-    include "src/lib_char.asm"
+    include "src/lib_char_eu.asm"
 
 
 _file_end:
