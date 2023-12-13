@@ -43,7 +43,7 @@ N_PERM      equ 1               ; Number of permutations times 3 per screen upda
 P_RAIN      equ 8               ; Probability of rain: 1/p_rain
 N_FADEOUTS  equ 3               ; Number of chars to darken at the end of the rain
 SPEED_VAR   equ 8               ; Speed variation of the rain drops
-WAIT_CYCLES equ 3               ; N wait cycles before refresh. 1=50fps, 2=25fps, etc
+WAIT_CYCLES equ 1               ; N wait cycles before refresh. 1=50fps, 2=25fps, etc
 
 _main:
     call _setup
@@ -80,25 +80,12 @@ _setup:
     ret
 
 _update:
-    ld a, 1
-    ld (_update_in_progress), a
     call _update_rain_state
     call _update_rain_columns
     ; call _update_rnd_char
-    ld a, 1
-    ld (_request_render), a
     ld a, 0
-    ld (_update_in_progress), a
+    ld (_request_update), a
     ret
-
-_draw:
-    ; Draw is redundant in this version. All updates are done 
-    ; directly in VRAM and the screen is refreshed by the interrupt hook.
-    ; Only reset the request_render flag, so that the _update function is
-    ; called again.
-    ld a, 0
-    ld (_request_render), a
-    ret 
 
 _run_interrupt:
     ld hl, _interrupt_counter
@@ -107,13 +94,9 @@ _run_interrupt:
     jp nz, _old_interrupt_hook
     ; Reset _interrupt counter and call _draw
     ld (hl), WAIT_CYCLES
-__run_interrupt_on_request_render:
-    ; Check if the request_render flag is set.
-    ld a, (_request_render)
-    cp 1
-    jp nz, _old_interrupt_hook
-    ; Update was ready, render request was set. 
-    call _draw
+__run_interrupt_on_request_update:
+    ld a, 1
+    ld (_request_update), a
 ; Interrupt jump block.
 _old_interrupt_hook:
     db 0, 0, 0, 0, 0 
@@ -457,11 +440,7 @@ _rnd8_data:
     db $2c, $40, $36, $3f, $92, $6b, $f6, $cb
     db $f8, $00, $ca, $d9, $e8, $4c, $20, $a3
 
-_request_render:
-    db 0
-_update_in_progress:
-    db 0
-_draw_in_progress:
+_request_update:
     db 0
 _interrupt_counter:
     db 1
@@ -492,7 +471,6 @@ _name_table_buffer:
     ds WIDTH*HEIGHT, $20
 _color_table_buffer:
     ds WIDTH*HEIGHT, $21
-
 
 ; Add includes here, so they are out of the way at debugging.
     include "src/lib_vdp.asm"
