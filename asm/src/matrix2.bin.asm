@@ -14,8 +14,6 @@
 
 
 ORGADR      equ $c000
-CHGMOD      equ $005f
-BREAKX      equ $00b7
 
 HTIMI       equ $fd9f
 JIFFY       equ $fc9e           ; 50Hz Jiffy Counter (2B/RW)
@@ -50,16 +48,14 @@ WAIT_CYCLES equ 3               ; N wait cycles before refresh. 1=50fps, 2=25fps
 _main:
     call _setup
 _main_loop:
-    ld a, (_request_render)
-    cp 0
-    jp nz, __breakx
+    ld a, (_request_update)
+    cp 1
+    jp nz, _main_loop
     call _update
-    ; draw is handled by interrupt hook, after _request_render is set to 1.
-__breakx:
-    call BREAKX
-    jr nc, _main_loop
-    call _cleanup
-    ret
+    jr _main_loop
+    ; It should never reach this point.
+    di
+    halt
 
 _setup:
     ; Install interrupt hook.
@@ -81,11 +77,6 @@ _setup:
     ld de, CGPTBL1
     ld bc, $0800
     call _ldirvm
-    ret
-
-_cleanup:
-    ld a, 0
-    call CHGMOD
     ret
 
 _update:
