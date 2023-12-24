@@ -12,7 +12,6 @@
 ;   See the License for the specific language governing permissions and
 ;   limitations under the License.
 
-
 ORGADR      equ $c000
 
 HTIMI       equ $fd9f
@@ -484,7 +483,7 @@ _color_table_buffer:
     include "src/lib_char_eu.asm"
 
 _debug_timing:
-    ifdef DEBUG_TIMING
+    ifdef DEBUG
     and %00001111
     or %00100000
     di

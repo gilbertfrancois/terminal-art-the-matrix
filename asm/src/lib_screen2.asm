@@ -54,7 +54,7 @@ _init_name_table:
     ; in:        none
     ; registers: af, bc, de
     ld de, NAMTBL2
-    call _setwrt
+    call _setwrt_de
     ld b, 3
 _init_name_table_next_b:
     ld a, 0
