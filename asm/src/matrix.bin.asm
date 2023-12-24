@@ -58,7 +58,9 @@ _main_loop:
     ld a, (_request_render)
     cp 0
     jp nz, __breakx
+
     call _update
+    
     ; draw is handled by interrupt hook, after _request_render is set to 1.
 __breakx:
     call BREAKX
@@ -98,6 +100,9 @@ _cleanup:
     ret
 
 _update:
+        ; Begin visual time measurement
+        ld a, $26
+        call _debug_timing
     ld a, 1
     ld (_update_in_progress), a
     call _update_rain_state
@@ -107,9 +112,15 @@ _update:
     ld (_request_render), a
     ld a, 0
     ld (_update_in_progress), a
+        ; End visual time measurement
+        ld a, $22
+        call _debug_timing
     ret
 
 _draw:
+        ; Begin visual time measurement
+        ld a, $24
+        call _debug_timing
     ld a, 1
     ld (_draw_in_progress), a
     ; Copy new state to VRAM
@@ -121,6 +132,10 @@ _draw:
     ld (_request_render), a
     ld a, 0
     ld (_draw_in_progress), a
+        ; End visual time measurement
+        ld a, $26
+        call _debug_timing
+
     ret 
 
 _run_interrupt:
@@ -506,6 +521,16 @@ _name_table_buffer:
     ds WIDTH*HEIGHT, $20
 _color_table_buffer:
     ds WIDTH*HEIGHT, $21
+
+_debug_timing:
+    and %00001111
+    or %00100000
+    di
+    out (VDPControl), a
+    ld a, %10000111
+    out (VDPControl), a
+    ei
+    ret 
 
 
 _file_end:
