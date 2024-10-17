@@ -37,7 +37,6 @@ SCREENMODE  equ 1               ; 0 = text mode, 1 = bitmap mode
 WIDTH       equ 32              ; Screen width
 HEIGHT      equ 24              ; Screen height 
 HHEIGHT     equ HEIGHT/2        ; Half screen height
-NAME_TABLE  equ $1800           ; Address of the name table
 N_PERM      equ 1               ; Number of permutations times 3 per screen update
 P_RAIN      equ 8               ; Probability of rain: 1/p_rain
 N_FADEOUTS  equ 3               ; Number of chars to darken at the end of the rain
@@ -279,7 +278,7 @@ _update_rain_column_chars:
     call _get_index         ; hl = k = y * WIDTH + x
     ex de, hl               ; de = k
     ; update the character at k in the name table buffer
-    ld hl, NAME_TABLE
+    ld hl, NAMTBL1
     add hl, de
     push hl
     call _get_char
@@ -299,7 +298,7 @@ __update_rain_column_chars_continue:
     call _get_index         ; hl = k = y * WIDTH + x
     ex de, hl               ; de = k
     ; update the character at k in the name table buffer
-    ld hl, NAME_TABLE
+    ld hl, NAMTBL1
     add hl, de
     ld a, $20
     call _set_byte_in_vdp
