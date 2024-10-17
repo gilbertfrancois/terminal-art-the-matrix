@@ -397,6 +397,23 @@ __update_rain_column_colors_continue_2:
     ld (_color), hl
     call _cp_color_at_k_in_vdp
 __update_rain_column_colors_continue_3:
+    ; Remove a character at the end of the rain trail.
+    ; if (end > 1), continue 
+    ld a, (_end)
+    sub 1
+    jp c, __update_rain_column_colors_continue_4
+    ld a, (_end)
+    ; dec a
+    ld c, a                 ; c = row
+    ld a, (_col)
+    ld b, a                 ; b = col
+    call _get_index         ; hl = k = y * WIDTH + x
+    call _times8_hl
+    ex de, hl               ; de = k
+    ld hl, _color_tail
+    ld (_color), hl
+    call _cp_color_at_k_in_vdp
+__update_rain_column_colors_continue_4:
     ret
 
 _update_rnd_char:
