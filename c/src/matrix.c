@@ -21,8 +21,8 @@
 #include <Windows.h>
 #else
 #include <sys/ioctl.h>
-#include <unistd.h>
 #include <time.h>
+#include <unistd.h>
 #endif
 
 int width = 80;
@@ -235,10 +235,10 @@ void get_terminal_size(void) {
 #elif defined(WIOCGETD)
     struct uwdata w;
     ioctl(STDOUT_FILENO, WIOCGETD, &w);
-    if(w.uw_vs) {
+    if (w.uw_vs) {
         term_rows = w.uw_height / w.uw_vs;
     }
-    if(w.uw_hs) {
+    if (w.uw_hs) {
         term_cols = w.uw_width / w.uw_hs;
     }
 #elif defined(TIOCGWINSZ)
