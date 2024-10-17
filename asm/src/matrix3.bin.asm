@@ -167,12 +167,12 @@ _update_rain_columns:
     ld b, WIDTH
     ld h, 0
     ld l, b
-    ld (_COL), hl
+    ld (_col), hl
 __update_rain_columns_loop:
     push bc
-    ld de, (_COL)
+    ld de, (_col)
     dec de
-    ld (_COL), de
+    ld (_col), de
     ld hl, _drop_state 
     add hl, de                  ; hl = &drop_state[i]
     ld a, (hl)                  ; a = drop_state[i]
