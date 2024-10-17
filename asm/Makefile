@@ -15,5 +15,8 @@ matrix:
 matrix2:
 		$(ASM) ${ASM_FLAGS} src/$@.bin.asm -L ${DIST_DIR}/$@.bin.sym -o ${DIST_DIR}/$@.bin
 
+matrix3:
+		$(ASM) ${ASM_FLAGS} src/$@.bin.asm -L ${DIST_DIR}/$@.bin.sym -o ${DIST_DIR}/$@.bin
+
 clean:
 	rm -rf ${DIST_DIR}/*
