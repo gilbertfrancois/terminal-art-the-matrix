@@ -37,10 +37,8 @@ _app_constants:
 SCREENMODE  equ 2               ; 0 = text mode, 1 = bitmap mode
 WIDTH       equ 32              ; Screen width
 HEIGHT      equ 24              ; Screen height
-HEIGHTP1    equ 25              ; Screen height minus one
-HEIGHTP2    equ 26              ; Screen height minus two
 HHEIGHT     equ HEIGHT/2        ; Half screen height
-N_PERM      equ 1               ; Number of permutations times 3 per screen update
+N_PERM      equ 9               ; Number of permutations times 3 per screen update
 P_RAIN      equ 8               ; Probability of rain: 1/p_rain
 N_FADEOUTS  equ 3               ; Number of chars to darken at the end of the rain
 SPEED_VAR   equ 8               ; Speed variation of the rain drops
@@ -83,7 +81,7 @@ _update:
         call _debug_timing
     call _update_rain_state
     call _update_rain_columns
-    ; call _update_rnd_char
+    call _update_rnd_char
     ld a, 0
     ld (_request_update), a
         ; End visual time measurement.
@@ -219,10 +217,18 @@ _update_rain_column:
     jr c, __then_end_is_zero
 __else_end_eq_start_min_length:
     ld (_end), a
+    ld de, (_col)
+    ld hl, _drop_end
+    add hl, de
+    ld (hl), a
     jr __update_rain_column_continue
 __then_end_is_zero:
     ld a, 0
     ld (_end), a
+    ld de, (_col)
+    ld hl, _drop_end
+    add hl, de
+    ld (hl), a
 __update_rain_column_continue:
     ; if (end > HEIGHT)
     ld a, (_end)
@@ -252,6 +258,9 @@ __reset_all_states_for_column:
     add hl, de
     ld (hl), 0
     ld hl, _drop_length
+    add hl, de
+    ld (hl), 0
+    ld hl, _drop_end
     add hl, de
     ld (hl), 0
 __update_rain_column_ret:
@@ -319,7 +328,7 @@ _update_rain_column_chars:
     call _times8_hl
     ex de, hl               ; de = k
     ; update the character at k in the pattern generator table
-    call _cp_rnd_char_at_k_in_vdp:
+    call _cp_rnd_char_at_k_in_vdp
 __update_rain_column_chars_continue:
     ; Remove a character at the end of the rain trail.
     ; if (end > 1), continue 
@@ -335,7 +344,7 @@ __update_rain_column_chars_continue:
     call _times8_hl
     ex de, hl               ; de = k
     ; update the character at k in the pattern generator table
-    call _cp_spc_char_at_k_in_vdp:
+    call _cp_spc_char_at_k_in_vdp
 __update_rain_column_chars_ret:
     ret
 
@@ -360,7 +369,7 @@ __update_rain_column_colors_continue_1:
     ; Set color to green at start - 1 of the trail
     ; if (start - height-1) > 0 or (start - 1) < 0 then skip
     ld a, (_start)
-    sub HEIGHTP1
+    sub HEIGHT + 1
     jp nc, __update_rain_column_colors_continue_2
     ld a, (_start)
     sub 1
@@ -380,7 +389,7 @@ __update_rain_column_colors_continue_2:
     ; Set color to green at start - 1 of the trail
     ; if (start - height-1) > 0 or (start - 1) < 0 then skip
     ld a, (_start)
-    sub HEIGHTP2
+    sub HEIGHT + 2
     jp nc, __update_rain_column_colors_continue_3
     ld a, (_start)
     sub 2
@@ -416,39 +425,85 @@ __update_rain_column_colors_continue_3:
 __update_rain_column_colors_continue_4:
     ret
 
+_set_color_tile_in_vdp:
+    ; Set color tile in vdp
+    ; in: a = row
+    ;     _color = address of the color tile
+    ; registers: af, bc, hl
+    ld c, a
+    ld a, (_col)
+    ld b, a
+    call _get_index
+    call _times8_hl
+    ex de, hl
+    ld hl, _color_default
+    ld (_color), hl
+    call _cp_color_at_k_in_vdp
+
 _update_rnd_char:
-    ld b, N_PERM
-    ld c, 3
-__update_rnd_char_outer_loop:
+    ; This function makes random permutations in the matrix.
+    ; It takes a random (row, col) pair and checks if the coord is inside a
+    ; rain trail. If true, then permutate the character in the pattern generator
+    ; table.
+    ld b, N_PERM                        ; Use b as loop counter
+    ld c, 0
+__update_rnd_char_loop:
     push bc
-__update_rnd_char_inner_loop:
-    ld a, $ff                   ; get a random offset in the 1/3 part of the screen
-    push bc
+    ld a, 0
+    ld (_start), a
+    ld (_end), a
+    ld (_row), a
+    ld (_col), a
+    ; Pick a random col
+    ld a, WIDTH
     call _rnd8
-    pop bc
-    dec c
-    ld d, c                     ; d = 0..2, offset to the 1/3 part of the screen 
-    ld e, a                     ; e = 0..255, offset in the 1/3 part of the screen
-    ld hl, _name_table_buffer
+    ld (_col), a
+    ; Check for rain in this column
+    ld hl, _drop_state
+    ld de, (_col)
     add hl, de
     ld a, (hl)
-    ; if (a == ' '), do nothing
-    cp $20
-    jp z, __update_rnd_char_inner_loop_next
-    ; else replace the character with a random character
-    push bc
-    push hl
-    call _get_char
-    pop hl
+    cp 1                                ; Is there rain in this col?
+    jp nz, __update_rnd_char_loop_next  ; if (drop_state[i] != 1) goto next
+__update_rnd_char_loop_start:
+    ; Pick a random row
+    ld a, HEIGHT - 1
+    call _rnd8
+    ld (_row), a
+    ; if (row > drop_start[i]) goto next
+    ld hl, _drop_start
+    ld de, (_col)
+    add hl, de
+    ld e, (hl)                          ; value of drop_start[i]
+    ld a, e
+    ld (_start), a
+    ld a, (_row)                        ; row_i
+    and a                               ; reset carry
+    sub e                               ; row_i - drop_start[i]
+    jp nc, __update_rnd_char_loop_next
+    ; if (row < drop_end[i])
+    ld hl, _drop_end
+    ld de, (_col)
+    add hl, de
+    ld e, (hl)                          ; value of drop_end[i]
+    ld a, e
+    ld (_end), a                      ; for debugging
+    ld a, (_row)                        ; row_i
+    and a                               ; reset carry
+    sub e                               ; row_i - drop_end[i]
+    jp c, __update_rnd_char_loop_next
+    ; The (row, col) is inside a drop trail. Permutate the char.
+    ld a, (_row)
+    ld c, a
+    ld a, (_col)
+    ld b, a
+    call _get_index
+    call _times8_hl
+    ex de, hl
+    call _cp_rnd_char_at_k_in_vdp
+__update_rnd_char_loop_next:
     pop bc
-    ld (hl), a
-__update_rnd_char_inner_loop_next:
-    ld a, c
-    cp 0
-    jp nz, __update_rnd_char_inner_loop
-    pop bc
-    ld c, 2
-    djnz __update_rnd_char_outer_loop
+    djnz __update_rnd_char_loop
     ret
 
 _get_char:
@@ -606,6 +661,8 @@ _end:
 ; with an 8bit or 16bit register.
 _col:
     dw 0
+_row:
+    dw 0
 
 ; State arrays for the rain drops, one state for each column.
 _drop_state:
@@ -618,10 +675,8 @@ _drop_start:
     ds WIDTH, 0
 _drop_length:
     ds WIDTH, 0
-_name_table_buffer:
-    ds WIDTH*HEIGHT, $20
-_color_table_buffer:
-    ds WIDTH*HEIGHT, $21
+_drop_end:
+    ds WIDTH, 0
 
 ; Add includes here, so they are out of the way at debugging.
     include "src/lib_vdp.asm"
