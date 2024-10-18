@@ -37,11 +37,11 @@ SCREENMODE  equ 1               ; 0 = text mode, 1 = bitmap mode
 WIDTH       equ 32              ; Screen width
 HEIGHT      equ 24              ; Screen height 
 HHEIGHT     equ HEIGHT/2        ; Half screen height
-N_PERM      equ 1               ; Number of permutations times 3 per screen update
+N_PERM      equ 3               ; Number of permutations times 3 per screen update
 P_RAIN      equ 8               ; Probability of rain: 1/p_rain
 N_FADEOUTS  equ 3               ; Number of chars to darken at the end of the rain
 SPEED_VAR   equ 8               ; Speed variation of the rain drops
-WAIT_CYCLES equ 1               ; N wait cycles before refresh. 1=50fps, 2=25fps, etc
+WAIT_CYCLES equ 2               ; N wait cycles before refresh. 1=50fps, 2=25fps, etc
 
 _main:
     call _setup
@@ -83,7 +83,7 @@ _update:
         call _debug_timing
     call _update_rain_state
     call _update_rain_columns
-    ; call _update_rnd_char
+    call _update_rnd_char
     ld a, 0
     ld (_request_update), a
         ; End visual time measurement.
@@ -322,7 +322,7 @@ __update_rnd_char_inner_loop:
     add hl, de
     ld a, (hl)
     ; if (a == ' '), do nothing
-    cp $20                      
+    cp $20
     jp z, __update_rnd_char_inner_loop_next
     ; else replace the character with a random character
     push bc
@@ -473,8 +473,6 @@ _drop_length:
     ds WIDTH, 0
 _name_table_buffer:
     ds WIDTH*HEIGHT, $20
-_color_table_buffer:
-    ds WIDTH*HEIGHT, $21
 
 ; Add includes here, so they are out of the way at debugging.
     include "src/lib_vdp.asm"
