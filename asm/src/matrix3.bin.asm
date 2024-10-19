@@ -511,9 +511,8 @@ _get_char:
     ; in:  none
     ; out: hl = relative start of random char address in charset.
     ; registers: af, bc, hl
-    ld a, 159
+    ld a, 252
     call _rnd8
-    add 33              ; Start of printable characters in ASCII table, except space at 32
     call _times8        ; Multiply by 8, to get the start of the ram address of the charset
     ex de, hl
     ld hl, _charset
@@ -681,7 +680,7 @@ _drop_end:
 ; Add includes here, so they are out of the way at debugging.
     include "src/lib_vdp.asm"
     include "src/lib_screen2.asm"
-    include "src/lib_char_eu.asm"
+    include "src/chars.asm"
 
 _debug_timing:
     ifdef DEBUG
