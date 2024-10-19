@@ -38,7 +38,7 @@ SCREENMODE  equ 2               ; 0 = text mode, 1 = bitmap mode
 WIDTH       equ 32              ; Screen width
 HEIGHT      equ 24              ; Screen height
 HHEIGHT     equ HEIGHT/2        ; Half screen height
-N_PERM      equ 9               ; Number of permutations times 3 per screen update
+N_PERM      equ 6               ; Number of permutations times 3 per screen update
 P_RAIN      equ 8               ; Probability of rain: 1/p_rain
 N_FADEOUTS  equ 3               ; Number of chars to darken at the end of the rain
 SPEED_VAR   equ 8               ; Speed variation of the rain drops
