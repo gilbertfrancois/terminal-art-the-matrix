@@ -131,6 +131,21 @@ _update_rain_state:
     jp nz, __update_rain_state_ret ; if drop state is 1, skip
     ; set drop state to true for this column
     inc (hl)
+    ; set drop trail color
+__update_rain_state_set_color:
+    ld a, 3
+    call _rnd8
+    dec a
+    call _times8
+    ld a, l
+    push af
+    ld hl, _drop_color
+    ld a, (_col)
+    ld d, 0
+    ld e, a
+    add hl, de
+    pop af
+    ld (hl), a                  ; drop_color[i] = a
     ; set a random drop speed
     ld hl, _drop_speed
     add hl, de                  ; hl = &drop_speed[i]
@@ -401,8 +416,18 @@ __update_rain_column_colors_continue_2:
     ld b, a
     call _get_index
     call _times8_hl
-    ex de, hl
-    ld hl, _color_default
+    ex de, hl               ; de = vram destination
+    ; get default color for this column
+    ld a, (_col)
+    ld c, a
+    ld b, 0
+    ld hl, _drop_color      ; start of color offset addresses
+    add hl, bc              ; hl = *drop_color[i]
+    ld a, (hl)              ; a = drop_color[i]
+    ld b, 0
+    ld c, a
+    ld hl, _color_default1
+    add hl, bc
     ld (_color), hl
     call _cp_color_at_k_in_vdp
 __update_rain_column_colors_continue_3:
@@ -419,7 +444,17 @@ __update_rain_column_colors_continue_3:
     call _get_index         ; hl = k = y * WIDTH + x
     call _times8_hl
     ex de, hl               ; de = k
-    ld hl, _color_tail
+    ; get default color for this column
+    ld a, (_col)
+    ld c, a
+    ld b, 0
+    ld hl, _drop_color      ; start of color offset addresses
+    add hl, bc              ; hl = *drop_color[i]
+    ld a, (hl)              ; a = drop_color[i]
+    ld b, 0
+    ld c, a
+    ld hl, _color_tail1
+    add hl, bc
     ld (_color), hl
     call _cp_color_at_k_in_vdp
 __update_rain_column_colors_continue_4:
@@ -436,7 +471,7 @@ _set_color_tile_in_vdp:
     call _get_index
     call _times8_hl
     ex de, hl
-    ld hl, _color_default
+    ld hl, _color_default1
     ld (_color), hl
     call _cp_color_at_k_in_vdp
 
@@ -634,14 +669,22 @@ _rnd8_data:
 
 _spc:
     db $00, $00, $00, $00, $00, $00, $00, $00 
-_color_default:
+_color_default1:
     db $21, $21, $21, $21, $21, $21, $21, $21
+_color_default2:
+    db $31, $31, $31, $31, $31, $31, $31, $31
+_color_default3:
+    db $c1, $c1, $c1, $c1, $c1, $c1, $c1, $c1
 _color_head1:
     db $f1, $f1, $f1, $f1, $f1, $f1, $f1, $f1
 _color_head2:
     db $71, $71, $71, $71, $71, $71, $71, $71
-_color_tail:
+_color_tail1:
     db $21, $11, $21, $11, $21, $11, $21, $11
+_color_tail2:
+    db $31, $11, $31, $11, $31, $11, $31, $11
+_color_tail3:
+    db $c1, $11, $c1, $11, $c1, $11, $c1, $11
 _color:
     dw 0
 
@@ -675,6 +718,8 @@ _drop_start:
 _drop_length:
     ds WIDTH, 0
 _drop_end:
+    ds WIDTH, 0
+_drop_color:
     ds WIDTH, 0
 
 ; Add includes here, so they are out of the way at debugging.
