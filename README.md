@@ -83,22 +83,24 @@ This project contains an easy way to do code signing for your distribution binar
 
 ## Build and run the Z80 assembly version
 
-For MSX, there are 2 versions: a monochrome version using screen 1 (`matrixm.bin.asm`) and a color version using screen 2 (`matrixc.bin.asm`). To compile the code, follow the steps below:
+To compile the code, follow the steps below:
 
 - Install [VASM](http://www.compilers.de/vasm.html) assembler. There is an install script in `asm/bin/install_vasm.sh`. Then type:
 
 - ```sh
-  cd asm
+  cd <project folder>/asm
   make
   ```
 
-- The compiled binaries are located in `asm/dist/matrixc.bin` and `asm/dist/matrixm.bin`.
+- The compiled binaries are located in `asm/dist/matrix.bin` (for MSX-Basic environment) and `asm/dist/matrix.com` for MSX-DOS. Copy the binary on a floppy drive for your MSX.
 
-- Put it on a floppy disk and load it in your MSX with:
+- Start the bin version with: 
 
   ```sh
-  bload"matrixc.bin",r
+  bload"matrix.bin",r
   ```
+
+​	or the MSX-DOS version with typing `matrix` in the DOS prompt.
 
 When you don't own a MSX computer, you can use an emulator like [openMSX](https://openmsx.org/).
 
