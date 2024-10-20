@@ -13,28 +13,8 @@ The digital rain, a cascade of green characters raining down the screen, has bec
 | ![macOS](_assets/screenshots/macos.png)   | ![Windows](_assets/screenshots/windows.png) |
 | ----------------------------------------- | ------------------------------------------- |
 | *iTerm on macOS*                          | *CMD on Windows*                            |
-| ![Linux](_assets/screenshots/linux2x.png) | ![MSX](_assets/screenshots/msx.png)         |
-| *Terminal on Linux*                       | MSX                                         |
-
-
-
-## Follow the white rabbit...
-
-The provided C implementation is quite low level as it operates without the assistance of higher-level libraries, interacting directly with the terminal to create the digital rain effect. However, taking it to an even deeper level involves crafting a version in assembly language specifically tailored for the Z80 processor, targeting the remarkable MSX computers from the 80s.
-
-In the C version, the absence of libraries like ncurses means the code manages the raindrop animation logic at a lower level, interacting more directly with the terminal's output. Despite this, diving into Z80 assembly for the MSX goes even further by sidestepping any operating system or libraries, enabling direct manipulation of the hardware registers and memory addresses that control the MSX's Video Display Processor (VDP) responsible for rendering graphics.
-
-Creating the effect in Z80 assembly language for the MSX entails:
-
-1. **Hardware Interaction**: Directly addressing the VDP registers to control screen memory, character rendering, and display output.
-2. **Memory Management**: Allocating and managing memory for screen buffers, characters, and other essential data structures needed for animation.
-3. **Precise Timing**: Ensuring precise timing for screen updates and character movements to maintain a smooth and captivating animation.
-4. **Input/Output Handling**: If necessary, managing input devices and handling interrupts at a more intricate level than in higher-level languages.
-5. **Optimizations**: Crafting highly optimized code to maximize performance within the constraints and capabilities of the MSX hardware.
-
-Working in Z80 assembly for the MSX delves deep into the hardware specifics of the system, offering unparalleled control over its functionalities. This level of programming requires an intimate understanding of the MSX architecture, Z80 assembly language, and the intricacies of the Video Display Processor unique to the MSX platform.
-
-Overall, the leap from the C implementation to Z80 assembly for the MSX represents a significant shift toward a lower level of programming, allowing for an intricate and precise control over the system's hardware, ultimately resulting in a more optimized and customized digital rain effect.
+| ![Linux](_assets/screenshots/linux2x.png) | ![MSX](_assets/screenshots/msx_color.png)   |
+| *Terminal on Linux*                       | MSX (implementation in assembly)            |
 
 
 
@@ -101,19 +81,21 @@ This project contains an easy way to do code signing for your distribution binar
 
 ## Build and run the Z80 assembly version
 
-- Install [VASM](http://www.compilers.de/vasm.html) assembler. There is an install script in `asm/bin/install_vasm.sh`.
+For MSX, there are 2 versions: a monochrome version using screen 1 (`matrixm.bin.asm`) and a color version using screen 2 (`matrixc.bin.asm`). To compile the code, follow the steps below:
+
+- Install [VASM](http://www.compilers.de/vasm.html) assembler. There is an install script in `asm/bin/install_vasm.sh`. Then type:
 
 - ```sh
   cd asm
   make
   ```
 
-- The binary is located in `asm/dist/matrix.bin`.
+- The compiled binaries are located in `asm/dist/matrixc.bin` and `asm/dist/matrixm.bin`.
 
-- Put it on a floppy disk and load it in your MSX with
+- Put it on a floppy disk and load it in your MSX with:
 
   ```sh
-  bload"matrix.bin",r
+  bload"matrixc.bin",r
   ```
 
 When you don't own a MSX computer, you can use an emulator like [openMSX](https://openmsx.org/).
