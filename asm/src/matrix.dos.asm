@@ -1,4 +1,4 @@
-;   Copyright 2023 Gilbert Francois Duivesteijn
+;   Copyright 2024 Gilbert Francois Duivesteijn
 ;
 ;   Licensed under the Apache License, Version 2.0 (the "License");
 ;   you may not use this file except in compliance with the License.
@@ -14,18 +14,11 @@
 
 ;   Screen 2 version
 
-ORGADR      equ $c000
+ORGADR      equ $100
 
 HTIMI       equ $fd9f
+EXPTBL      equ $fcc1
 JIFFY       equ $fc9e           ; 50Hz Jiffy Counter (2B/RW)
-
-    ; Place header before the binary.
-    org ORGADR - 7
-    ; Bin header, 7 bytes
-    db $fe
-    dw _file_start
-    dw _file_end - 1
-    dw _main
 
     ; org statement after the header
     org ORGADR
@@ -38,7 +31,7 @@ WIDTH       equ 32              ; Screen width
 HEIGHT      equ 24              ; Screen height
 HHEIGHT     equ HEIGHT/2        ; Half screen height
 N_PERM      equ 6               ; Number of permutations times 3 per screen update
-P_RAIN      equ 8               ; Probability of rain: 1/p_rain
+P_RAIN      equ 6               ; Probability of rain: 1/p_rain
 N_FADEOUTS  equ 3               ; Number of chars to darken at the end of the rain
 SPEED_VAR   equ 8               ; Speed variation of the rain drops
 WAIT_CYCLES equ 2               ; N wait cycles before refresh. 1=50fps, 2=25fps, etc
@@ -57,22 +50,41 @@ _main_loop:
 
 _setup:
     ; Install interrupt hook.
-    di
-    ; Preserve old hook instructions
-    ld hl, HTIMI
-    ld de, _old_interrupt_hook
-    ld bc, 5
-    ldir
-    ; Copy new hook instructions
-    ld hl, _new_interrupt_hook
-    ld de, HTIMI
-    ld bc, 5
-    ldir
-    ei
+    call _setup_interrupt_hook
+    ; di
+    ; ; Preserve old hook instructions
+    ; ld hl, HTIMI
+    ; ld de, _old_interrupt_hook
+    ; ld bc, 5
+    ; ldir
+    ; ; Copy new hook instructions
+    ; ld hl, _new_interrupt_hook
+    ; ld de, HTIMI
+    ; ld bc, 5
+    ; ldir
+    ; ei
     call _init_sc2
     ld a, $21
     call _init_color_table
     call _rnd8_set_seed
+    ret
+
+_setup_interrupt_hook:
+    ; Install interrupt hook.
+    ; Preserve old hook instructions
+    di
+    ld hl, HTIMI
+    ld de, _old_interrupt_hook
+    ld bc, 5
+    ldir
+    ; Set new hook instructions
+    ld a, $f7                   ; RST #30
+    ld (HTIMI), a               ; In HTIMI hook
+    call _get_slot              ; Our Slot in A
+    ld (HTIMI+1), a             ; Next HTIMI hook byte
+    ld hl, _new_interrupt_hook
+    ld (HTIMI+2), hl
+    ei
     ret
 
 _update:
@@ -514,7 +526,6 @@ __update_rnd_char_loop_start:
     add hl, de
     ld e, (hl)                          ; value of drop_start[i]
     ld a, e
-    ld (_start), a                      ; for debugging
     ld a, (_row)                        ; row_i
     and a                               ; reset carry
     sub e                               ; row_i - drop_start[i]
@@ -525,7 +536,6 @@ __update_rnd_char_loop_start:
     add hl, de
     ld e, (hl)                          ; value of drop_end[i]
     ld a, e
-    ld (_end), a                        ; for debugging
     inc a                               ; value of drop_end[i] + 1, don't include the end
     ld a, (_row)                        ; row_i
     and a                               ; reset carry
@@ -550,7 +560,7 @@ _get_char:
     ; in:  none
     ; out: hl = relative start of random char address in charset.
     ; registers: af, bc, hl
-    ld a, 252
+    ld a, 253
     call _rnd8
     call _times8        ; Multiply by 8, to get the start of the ram address of the charset
     ex de, hl
@@ -559,6 +569,8 @@ _get_char:
     ret
 
 _rnd8_set_seed:
+    ; Set the pseudo seed for the random number generator to the jiffy counter.
+    ; registers: af
     ld a, (JIFFY)
     ld (_rnd8_idx), a
     ret
@@ -612,10 +624,8 @@ _get_index:
     ;       x = 0..31, y = 0..23
     ; out:  hl = k = y * WIDTH + x
     ; registers: af, bc, hl
-    ;
-    ; load y coordinate in low byte
-    ld l, c
-    xor a
+    ld l, c                 ; load y coordinate in low byte
+    xor a                   ; clear carry
     ; multiply y by COLS, shift L left 5 times, push overflow in H
     sla l
     rla
@@ -632,6 +642,31 @@ _get_index:
     ld a, b
     or l
     ld l, a
+    ret
+
+_get_slot:
+    in a,($A8)
+    rrca
+    rrca
+    and %00000011
+    ld c,a          ;c=slot
+    ld b,0
+    ld hl,EXPTBL
+    add hl,bc
+    ld a,(hl)
+    and #80
+    or c
+    ld c,a
+    inc hl
+    inc hl
+    inc hl
+    inc hl
+    ld a,(hl)
+    and $0c
+    or c
+    bit 7,a
+    ret nz
+    and %11
     ret
 
 
@@ -671,7 +706,7 @@ _rnd8_data:
     db $e5, $23, $58, $10, $85, $a7, $47, $35
     db $28, $73, $53, $d6, $ed, $14, $52, $22
     db $2c, $40, $36, $3f, $92, $6b, $f6, $cb
-    db $f8, $00, $ca, $d9, $e8, $4c, $20, $a3
+    db $f8, $01, $ca, $d9, $e8, $4c, $20, $a3
 
 _spc:
     db $00, $00, $00, $00, $00, $00, $00, $00 
