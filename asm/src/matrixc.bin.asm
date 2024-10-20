@@ -504,8 +504,9 @@ __update_rnd_char_loop:
     jp nz, __update_rnd_char_loop_next  ; if (drop_state[i] != 1) goto next
 __update_rnd_char_loop_start:
     ; Pick a random row
-    ld a, HEIGHT - 1
+    ld a, HEIGHT
     call _rnd8
+    dec a                               ; a = 0..HEIGHT-1
     ld (_row), a
     ; if (row > drop_start[i]) goto next
     ld hl, _drop_start
@@ -525,6 +526,7 @@ __update_rnd_char_loop_start:
     ld e, (hl)                          ; value of drop_end[i]
     ld a, e
     ld (_end), a                      ; for debugging
+    inc a                               ; value of drop_end[i] + 1, don't include the end
     ld a, (_row)                        ; row_i
     and a                               ; reset carry
     sub e                               ; row_i - drop_end[i]
