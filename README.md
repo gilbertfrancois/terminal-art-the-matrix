@@ -22,6 +22,8 @@ The digital rain, a cascade of green characters raining down the screen, has bec
 
 The C program boasts versatile compatibility, seamlessly running on a multitude of operating systems including macOS, Linux, Raspberry Pi OS and Windows. Its design is tailored to function effortlessly with nearly every standard C99 compiler available across these platforms. Whether compiling on macOS, Linux distributions, or Windows environments, this program ensures a consistent and reliable execution across diverse systems without compromise.
 
+The MSX code is written for MSX1 and fully compatible with MSX2 and higher. 
+
 
 
 ## Build and run the C version
