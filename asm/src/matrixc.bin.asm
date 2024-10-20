@@ -19,7 +19,6 @@ ORGADR      equ $c000
 HTIMI       equ $fd9f
 JIFFY       equ $fc9e           ; 50Hz Jiffy Counter (2B/RW)
 
-
     ; Place header before the binary.
     org ORGADR - 7
     ; Bin header, 7 bytes
@@ -73,6 +72,7 @@ _setup:
     call _init_sc2
     ld a, $21
     call _init_color_table
+    call _rnd8_set_seed
     ret
 
 _update:
@@ -514,7 +514,7 @@ __update_rnd_char_loop_start:
     add hl, de
     ld e, (hl)                          ; value of drop_start[i]
     ld a, e
-    ld (_start), a
+    ld (_start), a                      ; for debugging
     ld a, (_row)                        ; row_i
     and a                               ; reset carry
     sub e                               ; row_i - drop_start[i]
@@ -525,7 +525,7 @@ __update_rnd_char_loop_start:
     add hl, de
     ld e, (hl)                          ; value of drop_end[i]
     ld a, e
-    ld (_end), a                      ; for debugging
+    ld (_end), a                        ; for debugging
     inc a                               ; value of drop_end[i] + 1, don't include the end
     ld a, (_row)                        ; row_i
     and a                               ; reset carry
@@ -558,6 +558,11 @@ _get_char:
     add hl, de
     ret
 
+_rnd8_set_seed:
+    ld a, (JIFFY)
+    ld (_rnd8_idx), a
+    ret
+
 _rnd8:
     ; Get a random value in the range [1..a]
     ; in:  a = max value
@@ -566,9 +571,6 @@ _rnd8:
     push af
     ld a, (_rnd8_idx)
     inc a                ; the lookup table is 256 bytes long, overflow is ok.
-    ld c, a
-    ld a, (JIFFY)        ; use the low byte of the jiffy counter as a seed
-    add c                ; add the seed to the index
     ld (_rnd8_idx), a
     ld hl, _rnd8_data    ; start address lookup table
     ld b, 0
