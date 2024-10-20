@@ -4,18 +4,15 @@ DIST_DIR="./dist"
 # ASM_FLAGS=-Fbin -chklabels -nocase -DDEBUG=1
 ASM_FLAGS=-Fbin -chklabels -nocase
 
-all: matrix matrix2
+all: matrixm matrixc
 
 folders:
 	mkdir -p ${DIST_DIR}
 
-matrix:
+matrixm:
 		$(ASM) ${ASM_FLAGS} src/$@.bin.asm -L ${DIST_DIR}/$@.bin.sym -o ${DIST_DIR}/$@.bin
 
-matrix2:
-		$(ASM) ${ASM_FLAGS} src/$@.bin.asm -L ${DIST_DIR}/$@.bin.sym -o ${DIST_DIR}/$@.bin
-
-matrix3:
+matrixc:
 		$(ASM) ${ASM_FLAGS} src/$@.bin.asm -L ${DIST_DIR}/$@.bin.sym -o ${DIST_DIR}/$@.bin
 
 clean:

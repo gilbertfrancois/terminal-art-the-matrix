@@ -12,6 +12,8 @@
 ;   See the License for the specific language governing permissions and
 ;   limitations under the License.
 
+;   Screen 2 version
+
 ORGADR      equ $c000
 
 HTIMI       equ $fd9f
@@ -29,15 +31,14 @@ JIFFY       equ $fc9e           ; 50Hz Jiffy Counter (2B/RW)
     ; org statement after the header
     org ORGADR
 
-
 _file_start:
 
 _app_constants:
-SCREENMODE  equ 1               ; 0 = text mode, 1 = bitmap mode
+SCREENMODE  equ 2               ; 0 = text mode, 1 = bitmap mode
 WIDTH       equ 32              ; Screen width
-HEIGHT      equ 24              ; Screen height 
+HEIGHT      equ 24              ; Screen height
 HHEIGHT     equ HEIGHT/2        ; Half screen height
-N_PERM      equ 3               ; Number of permutations times 3 per screen update
+N_PERM      equ 6               ; Number of permutations times 3 per screen update
 P_RAIN      equ 8               ; Probability of rain: 1/p_rain
 N_FADEOUTS  equ 3               ; Number of chars to darken at the end of the rain
 SPEED_VAR   equ 8               ; Speed variation of the rain drops
@@ -69,12 +70,9 @@ _setup:
     ld bc, 5
     ldir
     ei
-    call _init_sc1
-    ; Load charset in the pattern table.
-    ld hl, _charset
-    ld de, CGPTBL1
-    ld bc, $0800
-    call _ldirvm
+    call _init_sc2
+    ld a, $21
+    call _init_color_table
     ret
 
 _update:
@@ -123,8 +121,10 @@ _update_rain_state:
     call _rnd8
     ; get the address of _drop_state for column i.
     dec a                       ; a = 0..WIDTH-1
+    ld (_col), a
     ld d, 0
     ld e, a
+
     ld hl, _drop_state
     add hl, de
     ; get current drop state for col i
@@ -133,6 +133,21 @@ _update_rain_state:
     jp nz, __update_rain_state_ret ; if drop state is 1, skip
     ; set drop state to true for this column
     inc (hl)
+    ; set drop trail color
+__update_rain_state_set_color:
+    ld a, 3
+    call _rnd8
+    dec a
+    call _times8
+    ld a, l
+    push af
+    ld hl, _drop_color
+    ld a, (_col)
+    ld d, 0
+    ld e, a
+    add hl, de
+    pop af
+    ld (hl), a                  ; drop_color[i] = a
     ; set a random drop speed
     ld hl, _drop_speed
     add hl, de                  ; hl = &drop_speed[i]
@@ -167,12 +182,12 @@ _update_rain_columns:
     ld b, WIDTH
     ld h, 0
     ld l, b
-    ld (_COL), hl
+    ld (_col), hl
 __update_rain_columns_loop:
     push bc
-    ld de, (_COL)
+    ld de, (_col)
     dec de
-    ld (_COL), de
+    ld (_col), de
     ld hl, _drop_state 
     add hl, de                  ; hl = &drop_state[i]
     ld a, (hl)                  ; a = drop_state[i]
@@ -219,10 +234,18 @@ _update_rain_column:
     jr c, __then_end_is_zero
 __else_end_eq_start_min_length:
     ld (_end), a
+    ld de, (_col)
+    ld hl, _drop_end
+    add hl, de
+    ld (hl), a
     jr __update_rain_column_continue
 __then_end_is_zero:
     ld a, 0
     ld (_end), a
+    ld de, (_col)
+    ld hl, _drop_end
+    add hl, de
+    ld (hl), a
 __update_rain_column_continue:
     ; if (end > HEIGHT)
     ld a, (_end)
@@ -230,6 +253,7 @@ __update_rain_column_continue:
     jr nc, __reset_all_states_for_column
     ; else update the drop state
     call _update_rain_column_chars
+    call _update_rain_column_colors
     ; drop_start[i]++
     ld hl, _drop_start
     ld de, (_col)
@@ -253,16 +277,58 @@ __reset_all_states_for_column:
     ld hl, _drop_length
     add hl, de
     ld (hl), 0
+    ld hl, _drop_end
+    add hl, de
+    ld (hl), 0
 __update_rain_column_ret:
     ret
 
-_set_byte_in_vdp:
-    ; in: a = character
-    ;     hl = destination in vdp memory 
-    push af
-    call _setwrt_hl
-    pop af
-    out (VDPData), a
+_cp_rnd_char_at_k_in_vdp:
+    ; Copy a character from RAM to pattern generator table.
+    ; in: de = vram destination address
+    ; registers: af, bc, de, hl
+    ld hl, CGPTBL2
+    add hl, de              ; de = vram destination
+    ex de, hl
+    push de
+    call _get_char          ; hl = ram source
+    pop de
+    ld a, 8
+    ld c, a                 ; bc = len bytes to copy
+    ld a, 0
+    ld b, a
+    call _ldirvm            ; hl = char addr, de = k, 
+    ret
+
+_cp_spc_char_at_k_in_vdp:
+    ; Copy an empty character from RAM to pattern generator table.
+    ; in: de = vram destination address
+    ; registers: af, bc, de, hl
+    ld hl, CGPTBL2
+    add hl, de              ; de = vram destination
+    ex de, hl
+    ld hl, _spc
+    ld a, 8
+    ld c, a                 ; bc = len bytes to copy
+    ld a, 0
+    ld b, a
+    call _ldirvm            ; hl = char addr, de = k, 
+    ret
+
+_cp_color_at_k_in_vdp:
+    ; Copy an empty character from RAM to pattern generator table.
+    ; in: de = vram destination address
+    ;     _color = color value
+    ; registers: af, bc, de, hl
+    ld hl, COLTBL2
+    add hl, de              ; de = vram destination
+    ex de, hl
+    ld hl, (_color)
+    ld a, 8
+    ld c, a                 ; bc = len bytes to copy
+    ld a, 0
+    ld b, a
+    call _ldirvm            ; hl = char addr, de = k, 
     ret
 
 _update_rain_column_chars:
@@ -276,14 +342,10 @@ _update_rain_column_chars:
     ld a, (_col)
     ld b, a                 ; b = col
     call _get_index         ; hl = k = y * WIDTH + x
+    call _times8_hl
     ex de, hl               ; de = k
-    ; update the character at k in the name table buffer
-    ld hl, NAMTBL1
-    add hl, de
-    push hl
-    call _get_char
-    pop hl
-    call _set_byte_in_vdp
+    ; update the character at k in the pattern generator table
+    call _cp_rnd_char_at_k_in_vdp
 __update_rain_column_chars_continue:
     ; Remove a character at the end of the rain trail.
     ; if (end > 1), continue 
@@ -296,58 +358,202 @@ __update_rain_column_chars_continue:
     ld a, (_col)
     ld b, a                 ; b = col
     call _get_index         ; hl = k = y * WIDTH + x
+    call _times8_hl
     ex de, hl               ; de = k
-    ; update the character at k in the name table buffer
-    ld hl, NAMTBL1
-    add hl, de
-    ld a, $20
-    call _set_byte_in_vdp
+    ; update the character at k in the pattern generator table
+    call _cp_spc_char_at_k_in_vdp
 __update_rain_column_chars_ret:
     ret
 
+
+_update_rain_column_colors:
+    ; Set color to white at start of the trail
+    ; If (start > HEIGHT) then skip set color
+    ld a, (_start)
+    sub HEIGHT
+    jp nc, __update_rain_column_colors_continue_1
+    ld a, (_start)
+    ld c, a                 ; c = row
+    ld a, (_col)
+    ld b, a                 ; b = col
+    call _get_index         ; hl = k = y * WIDTH + x
+    call _times8_hl
+    ex de, hl               ; de = k
+    ld hl, _color_head1
+    ld (_color), hl
+    call _cp_color_at_k_in_vdp:
+__update_rain_column_colors_continue_1:
+    ; Set color to green at start - 1 of the trail
+    ; if (start - height-1) > 0 or (start - 1) < 0 then skip
+    ld a, (_start)
+    sub HEIGHT + 1
+    jp nc, __update_rain_column_colors_continue_2
+    ld a, (_start)
+    sub 1
+    jp c, __update_rain_column_colors_continue_2
+    ld a, (_start)
+    sub 1
+    ld c, a
+    ld a, (_col)
+    ld b, a
+    call _get_index
+    call _times8_hl
+    ex de, hl
+    ld hl, _color_head2
+    ld (_color), hl
+    call _cp_color_at_k_in_vdp
+__update_rain_column_colors_continue_2:
+    ; Set color to green at start - 1 of the trail
+    ; if (start - height-1) > 0 or (start - 1) < 0 then skip
+    ld a, (_start)
+    sub HEIGHT + 2
+    jp nc, __update_rain_column_colors_continue_3
+    ld a, (_start)
+    sub 2
+    jp c, __update_rain_column_colors_continue_3
+    ld a, (_start)
+    sub 2
+    ld c, a
+    ld a, (_col)
+    ld b, a
+    call _get_index
+    call _times8_hl
+    ex de, hl               ; de = vram destination
+    ; get default color for this column
+    ld a, (_col)
+    ld c, a
+    ld b, 0
+    ld hl, _drop_color      ; start of color offset addresses
+    add hl, bc              ; hl = *drop_color[i]
+    ld a, (hl)              ; a = drop_color[i]
+    ld b, 0
+    ld c, a
+    ld hl, _color_default1
+    add hl, bc
+    ld (_color), hl
+    call _cp_color_at_k_in_vdp
+__update_rain_column_colors_continue_3:
+    ; Remove a character at the end of the rain trail.
+    ; if (end > 1), continue 
+    ld a, (_end)
+    sub 1
+    jp c, __update_rain_column_colors_continue_4
+    ld a, (_end)
+    ; dec a
+    ld c, a                 ; c = row
+    ld a, (_col)
+    ld b, a                 ; b = col
+    call _get_index         ; hl = k = y * WIDTH + x
+    call _times8_hl
+    ex de, hl               ; de = k
+    ; get default color for this column
+    ld a, (_col)
+    ld c, a
+    ld b, 0
+    ld hl, _drop_color      ; start of color offset addresses
+    add hl, bc              ; hl = *drop_color[i]
+    ld a, (hl)              ; a = drop_color[i]
+    ld b, 0
+    ld c, a
+    ld hl, _color_tail1
+    add hl, bc
+    ld (_color), hl
+    call _cp_color_at_k_in_vdp
+__update_rain_column_colors_continue_4:
+    ret
+
+_set_color_tile_in_vdp:
+    ; Set color tile in vdp
+    ; in: a = row
+    ;     _color = address of the color tile
+    ; registers: af, bc, hl
+    ld c, a
+    ld a, (_col)
+    ld b, a
+    call _get_index
+    call _times8_hl
+    ex de, hl
+    ld hl, _color_default1
+    ld (_color), hl
+    call _cp_color_at_k_in_vdp
+
 _update_rnd_char:
-    ld b, N_PERM
-    ld c, 3
-__update_rnd_char_outer_loop:
+    ; This function makes random permutations in the matrix.
+    ; It takes a random (row, col) pair and checks if the coord is inside a
+    ; rain trail. If true, then permutate the character in the pattern generator
+    ; table.
+    ld b, N_PERM                        ; Use b as loop counter
+    ld c, 0
+__update_rnd_char_loop:
     push bc
-__update_rnd_char_inner_loop:
-    ld a, $ff                   ; get a random offset in the 1/3 part of the screen
-    push bc
+    ld a, 0
+    ld (_start), a
+    ld (_end), a
+    ld (_row), a
+    ld (_col), a
+    ; Pick a random col
+    ld a, WIDTH
     call _rnd8
-    pop bc
-    dec c
-    ld d, c                     ; d = 0..2, offset to the 1/3 part of the screen 
-    ld e, a                     ; e = 0..255, offset in the 1/3 part of the screen
-    ld hl, _name_table_buffer
+    ld (_col), a
+    ; Check for rain in this column
+    ld hl, _drop_state
+    ld de, (_col)
     add hl, de
     ld a, (hl)
-    ; if (a == ' '), do nothing
-    cp $20
-    jp z, __update_rnd_char_inner_loop_next
-    ; else replace the character with a random character
-    push bc
-    push hl
-    call _get_char
-    pop hl
+    cp 1                                ; Is there rain in this col?
+    jp nz, __update_rnd_char_loop_next  ; if (drop_state[i] != 1) goto next
+__update_rnd_char_loop_start:
+    ; Pick a random row
+    ld a, HEIGHT - 1
+    call _rnd8
+    ld (_row), a
+    ; if (row > drop_start[i]) goto next
+    ld hl, _drop_start
+    ld de, (_col)
+    add hl, de
+    ld e, (hl)                          ; value of drop_start[i]
+    ld a, e
+    ld (_start), a
+    ld a, (_row)                        ; row_i
+    and a                               ; reset carry
+    sub e                               ; row_i - drop_start[i]
+    jp nc, __update_rnd_char_loop_next
+    ; if (row < drop_end[i])
+    ld hl, _drop_end
+    ld de, (_col)
+    add hl, de
+    ld e, (hl)                          ; value of drop_end[i]
+    ld a, e
+    ld (_end), a                      ; for debugging
+    ld a, (_row)                        ; row_i
+    and a                               ; reset carry
+    sub e                               ; row_i - drop_end[i]
+    jp c, __update_rnd_char_loop_next
+    ; The (row, col) is inside a drop trail. Permutate the char.
+    ld a, (_row)
+    ld c, a
+    ld a, (_col)
+    ld b, a
+    call _get_index
+    call _times8_hl
+    ex de, hl
+    call _cp_rnd_char_at_k_in_vdp
+__update_rnd_char_loop_next:
     pop bc
-    ld (hl), a
-__update_rnd_char_inner_loop_next:
-    ld a, c
-    cp 0
-    jp nz, __update_rnd_char_inner_loop
-    pop bc
-    ld c, 2
-    djnz __update_rnd_char_outer_loop
+    djnz __update_rnd_char_loop
     ret
 
 _get_char:
-    ; Get a random character from the printable character set.
+    ; Get start address of random character in ram.
     ; in:  none
-    ; out: a = random character
+    ; out: hl = relative start of random char address in charset.
     ; registers: af, bc, hl
-    ld a, 159
+    ld a, 252
     call _rnd8
-    add 33
+    call _times8        ; Multiply by 8, to get the start of the ram address of the charset
+    ex de, hl
+    ld hl, _charset
+    add hl, de
     ret
 
 _rnd8:
@@ -361,7 +567,7 @@ _rnd8:
     ld c, a
     ld a, (JIFFY)        ; use the low byte of the jiffy counter as a seed
     add c                ; add the seed to the index
-    ld (_rnd8_idx), a    
+    ld (_rnd8_idx), a
     ld hl, _rnd8_data    ; start address lookup table
     ld b, 0
     ld c, a              ; current offset
@@ -375,6 +581,25 @@ _rnd8_rrange:
     adc a, b             ; undo last subtraction, range 1-rval
     ret
 
+_times8:
+    ; Multiply a by 8
+    ; in:  a = value
+    ; out: hl = value * 8
+    ; registers: af, hl
+    ld h, 0
+    ld l, a
+_times8_hl:
+    ; Multiply hl by 8
+    ; in : hl = value
+    ; out: hl = value * 8
+    ; registers: hl
+    sla l
+    rl h
+    sla l
+    rl h
+    sla l
+    rl h
+    ret
 
 _get_index:
     ; Get relative position in memory
@@ -444,6 +669,27 @@ _rnd8_data:
     db $2c, $40, $36, $3f, $92, $6b, $f6, $cb
     db $f8, $00, $ca, $d9, $e8, $4c, $20, $a3
 
+_spc:
+    db $00, $00, $00, $00, $00, $00, $00, $00 
+_color_default1:
+    db $21, $21, $21, $21, $21, $21, $21, $21
+_color_default2:
+    db $31, $31, $31, $31, $31, $31, $31, $31
+_color_default3:
+    db $c1, $c1, $c1, $c1, $c1, $c1, $c1, $c1
+_color_head1:
+    db $f1, $f1, $f1, $f1, $f1, $f1, $f1, $f1
+_color_head2:
+    db $71, $71, $71, $71, $71, $71, $71, $71
+_color_tail1:
+    db $21, $11, $21, $11, $21, $11, $21, $11
+_color_tail2:
+    db $31, $11, $31, $11, $31, $11, $31, $11
+_color_tail3:
+    db $c1, $11, $c1, $11, $c1, $11, $c1, $11
+_color:
+    dw 0
+
 _request_update:
     db 0
 _interrupt_counter:
@@ -458,7 +704,9 @@ _end:
 ; reserve 2 bytes for the column index, so that we can fetch it conveniently
 ; with an 8bit or 16bit register.
 _col:
-    dw 0                        
+    dw 0
+_row:
+    dw 0
 
 ; State arrays for the rain drops, one state for each column.
 _drop_state:
@@ -471,13 +719,15 @@ _drop_start:
     ds WIDTH, 0
 _drop_length:
     ds WIDTH, 0
-_name_table_buffer:
-    ds WIDTH*HEIGHT, $20
+_drop_end:
+    ds WIDTH, 0
+_drop_color:
+    ds WIDTH, 0
 
 ; Add includes here, so they are out of the way at debugging.
     include "src/lib_vdp.asm"
-    include "src/lib_screen1.asm"
-    include "src/lib_char_eu.asm"
+    include "src/lib_screen2.asm"
+    include "src/lib_chars.asm"
 
 _debug_timing:
     ifdef DEBUG
